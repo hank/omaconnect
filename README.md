@@ -1,6 +1,8 @@
 # OmaConnect
 
 OmaConnect is a native Omarchy bar plugin that integrates KDE Connect device state and control into the Quickshell desktop environment. It consists of a single manifest (`manifest.json`), a shared headless service (`Service.qml`), a D-Bus device controller (`KdeConnectController.qml`), and a per-monitor panel widget (`BarWidget.qml`).
+<img width="468" height="425" alt="image" src="https://github.com/user-attachments/assets/1a225f83-ec1b-4827-a200-0e29f531f0ed" />
+<img width="455" height="430" alt="image" src="https://github.com/user-attachments/assets/af30d475-7d46-4bd8-81f8-7284c1b7c1c6" />
 
 ## Panel Experience & UX Hierarchy
 
