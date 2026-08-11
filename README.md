@@ -23,16 +23,16 @@ OmaConnect is designed with strict boundaries and process isolation:
 
 The panel supports complete navigation without a mouse:
 
-| Key Binding | Action |
-| :--- | :--- |
-| `h`, `l` / `Left`, `Right` | Switch focus between Devices, Actions, and Remote Commands |
-| `j`, `k` / `Down`, `Up` | Navigate items within the currently focused section |
-| `Enter`, `Space` | Activate the focused item or submit the active composer |
-| `p` | Pair the currently selected device |
-| `u` | Request unpair confirmation for the selected device |
-| `y`, `c` / `Esc` | Confirm (`y`) or cancel (`c`/`Esc`) an active unpair prompt |
-| `r` | Force a manual refresh of D-Bus properties |
-| `Esc` | Close the active composer or hide the panel |
+| Key Binding                | Action                                                      |
+| :------------------------- | :---------------------------------------------------------- |
+| `h`, `l` / `Left`, `Right` | Switch focus between Devices, Actions, and Remote Commands  |
+| `j`, `k` / `Down`, `Up`    | Navigate items within the currently focused section         |
+| `Enter`, `Space`           | Activate the focused item or submit the active composer     |
+| `p`                        | Pair the currently selected device                          |
+| `u`                        | Request unpair confirmation for the selected device         |
+| `y`, `c` / `Esc`           | Confirm (`y`) or cancel (`c`/`Esc`) an active unpair prompt |
+| `r`                        | Force a manual refresh of D-Bus properties                  |
+| `Esc`                      | Close the active composer or hide the panel                 |
 
 ## Dependencies
 
@@ -43,6 +43,7 @@ OmaConnect relies on the following system packages:
 - `dbus` (provides `dbus-monitor` for real-time daemon signals)
 
 On Omarchy/Arch, install them via:
+
 ```bash
 omarchy-pkg-add kdeconnect glib2 dbus
 ```
@@ -52,19 +53,24 @@ If the KDE Connect daemon is not running or unavailable, the plugin falls back g
 ## Installation & Configuration
 
 ### Using the Plugin Manager
+
 ```bash
-omarchy-plugin-add https://github.com/<your-username>/omaconnect
+omarchy-plugin-add https://github.com/jitendradara12/omaconnect
 ```
 
 ### Manual Installation
+
 Clone this repository into the standard Omarchy plugins directory:
+
 ```bash
-git clone https://github.com/<your-username>/omaconnect ~/.config/omarchy/plugins/omaconnect
+git clone https://github.com/jitendradara12/omaconnect ~/.config/omarchy/plugins/omaconnect
 omarchy-restart-shell
 ```
 
 ### IPC Controls
+
 OmaConnect can be toggled externally via Omarchy's IPC:
+
 ```bash
 omarchy-shell ipc call omaconnect toggle
 omarchy-shell ipc call omaconnect open
