@@ -17,7 +17,7 @@ OmaConnect seamlessly bridges your Linux desktop with your Android, iOS, or seco
 - **📂 File Transfer Bridge**: Send files seamlessly from your desktop file manager or popover picker.
 - **📋 Wayland Clipboard Sync**: Send copied text to mobile clipboards using native `wl-clipboard` integration.
 - **⚡ Remote Device Commands**: Execute remote triggers configured on your mobile phone (e.g., lock device, play/pause media, custom scripts).
-- **📬 Phone & SMS Notifications**: View incoming phone notifications and SMS messages in a bounded feed with one-click dismiss and clear-all actions.
+- **📬 Notification status**: The current KDE Connect signal contract exposes notification IDs, not message content; OmaConnect does not fabricate notification bodies from those IDs.
 - **🎨 Glassmorphic Theme**: Custom dark styling with smooth micro-animations, adaptive HSL color tokens, and full keyboard navigation.
 
 ---
@@ -78,11 +78,8 @@ omarchy-shell reload
 
 ## 💻 Usage & Keyboard Controls
 
-### Launch & Test Mode
-Run OmaConnect directly using Quickshell's runner:
-```bash
-qs -p main.qml
-```
+### Installed Operation
+Omarchy loads `manifest.json` from `~/.config/omarchy/plugins/omaconnect`. The plugin contributes one `service` instance and a native `bar-widget`; it does not start a second Quickshell process. Add `omaconnect` to the bar layout through Omarchy's plugin configuration, then reload the existing shell.
 
 ### Quick Interactions
 - **Click Topbar Button**: Toggle the OmaConnect Popover Menu.
@@ -92,7 +89,7 @@ qs -p main.qml
 - **Send Clipboard**: Sends your current desktop Wayland selection to the phone clipboard.
 - **Send File**: Opens file selection dialog and transmits file over Wi-Fi.
 - **Remote Commands**: Click any exposed command pill to trigger remote desktop/phone actions.
-- **Notifications**: Hover or scroll through incoming notifications; click `✕` to dismiss individual items or `Clear All` to purge.
+- **Notifications**: Notification message content is intentionally omitted until a supported data-query contract is available.
 
 ### Keyboard Navigation & Accessibility
 - **`Tab` / `Shift+Tab`**: Cycle focus across topbar button, device cards, action buttons, and notification controls.

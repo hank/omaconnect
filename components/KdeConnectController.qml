@@ -5,6 +5,10 @@ import Quickshell.Io
 Item {
     id: root
 
+    // Only the shared service controller should own discovery and D-Bus
+    // monitoring; per-monitor fallback slots stay dormant when it is present.
+    property bool active: true
+
     // --- Exposed State Properties ---
     property bool daemonAvailable: false
     property bool sessionBusAvailable: false
@@ -16,6 +20,9 @@ Item {
     property var reachableDevices: []
     property var activeDevice: null
     property string statusMessage: "Initializing OmaConnect..."
+    property string lastActionError: ""
+    property string actionTargetDeviceId: ""
+    property int actionGeneration: 0
     property bool monitorRunning: false
     property var remoteCommands: []
     property bool fetchingCommands: false
@@ -33,6 +40,7 @@ Item {
     property string pendingSignalMember: ""
     property string pendingMonitorDevId: ""
     property string pendingMonitorMember: ""
+    property var pendingRefreshedCharging: null
 
     function addNotification(notif) {
         if (!notif || typeof notif !== "object") return;
@@ -85,36 +93,8 @@ Item {
     }
 
     function flushPendingNotificationArgs() {
-        if (!pendingNotifArgs || pendingNotifArgs.length === 0) return;
-        var isNotifMember = (pendingMonitorMember === "notificationAdded" ||
-                             pendingMonitorMember === "displayNotification" ||
-                             pendingMonitorMember === "notificationPosted" ||
-                             pendingMonitorMember === "notificationReceived" ||
-                             pendingMonitorMember === "receiveNotification");
-        if (!isNotifMember) return;
-
-        var app = "Notification";
-        var title = "Phone";
-        var body = "";
-
-        if (pendingNotifArgs.length === 1) {
-            body = pendingNotifArgs[0];
-        } else if (pendingNotifArgs.length === 2) {
-            title = pendingNotifArgs[0];
-            body = pendingNotifArgs[1];
-        } else if (pendingNotifArgs.length >= 3) {
-            app = pendingNotifArgs[0];
-            title = pendingNotifArgs[1];
-            body = pendingNotifArgs[2];
-        }
-
-        addNotification({
-            deviceId: pendingMonitorDevId,
-            appName: app,
-            title: title,
-            body: body
-        });
-
+        // KDE Connect's notification signals carry public IDs, not message
+        // text. Do not present those IDs as notification content.
         pendingNotifArgs = [];
     }
 
@@ -182,6 +162,8 @@ Item {
                 if (activeDevice && activeDevice.id === deviceId) return;
                 activeDevice = allDevices[i];
                 if (actionProcess.running) actionProcess.running = false;
+                actionGeneration++;
+                actionTargetDeviceId = "";
                 if (listCommandsProcess.running) listCommandsProcess.running = false;
                 remoteCommands = [];
                 fetchingCommands = false;
@@ -192,6 +174,7 @@ Item {
 
     // Trigger full health and device scan
     function refresh() {
+        if (!root.active) return;
         parsedAccumulator = [];
         healthCheckProcess.running = true;
     }
@@ -210,6 +193,7 @@ Item {
     }
 
     function triggerPresenceRefresh() {
+        if (!root.active) return;
         if (!debounceRefreshTimer.running) {
             debounceRefreshTimer.restart();
         }
@@ -224,6 +208,7 @@ Item {
     }
 
     function triggerBatteryRefresh() {
+        if (!root.active) return;
         if (!debounceBatteryTimer.running) {
             debounceBatteryTimer.restart();
         }
@@ -232,58 +217,50 @@ Item {
     // Action Execution Methods with Reachability Guard
     function ringDevice(deviceId) {
         var dev = getDevice(deviceId);
-        if (!dev || !dev.reachable) {
-            console.log("Cannot ring device: device is offline or unreachable.");
+        if (!canAct(dev) || actionProcess.running) {
+            statusMessage = "Ring unavailable: device must be paired and reachable.";
             return false;
         }
-        actionProcess.command = ["kdeconnect-cli", "-d", deviceId, "--ring"];
-        actionProcess.running = true;
-        return true;
+        return runAction(deviceId, ["kdeconnect-cli", "-d", deviceId, "--ring"], "Ring request sent");
     }
 
     function pingDevice(deviceId, msg) {
         var dev = getDevice(deviceId);
-        if (!dev || !dev.reachable) {
-            console.log("Cannot ping device: device is offline or unreachable.");
+        if (!canAct(dev) || actionProcess.running) {
+            statusMessage = "Ping unavailable: device must be paired and reachable.";
             return false;
         }
         var message = msg || "Hello from OmaConnect!";
-        actionProcess.command = ["kdeconnect-cli", "-d", deviceId, "--ping-msg", message];
-        actionProcess.running = true;
-        return true;
+        return runAction(deviceId, ["kdeconnect-cli", "-d", deviceId, "--ping-msg", message], "Ping sent");
     }
 
     function sendFile(deviceId) {
         var dev = getDevice(deviceId);
-        if (!dev || !dev.reachable) {
-            console.log("Cannot send file: device is offline or unreachable.");
+        if (!canAct(dev) || actionProcess.running) {
+            statusMessage = "File transfer unavailable: device must be paired and reachable.";
             return false;
         }
         var helperPath = Qt.resolvedUrl("../scripts/share_file.sh").toString();
         if (helperPath.indexOf("file://") === 0) helperPath = decodeURIComponent(helperPath.substring(7));
-        actionProcess.command = ["bash", helperPath, deviceId];
-        actionProcess.running = true;
-        return true;
+        return runAction(deviceId, ["bash", helperPath, deviceId], "File transfer started");
     }
 
     function shareText(deviceId, text) {
         var dev = getDevice(deviceId);
-        if (!dev || !dev.reachable) {
-            console.log("Cannot share text: device is offline or unreachable.");
+        if (!canAct(dev) || actionProcess.running) {
+            statusMessage = "Text sharing unavailable: device must be paired and reachable.";
             return false;
         }
         if (!text || text.trim().length === 0) {
             console.log("Cannot share text: text content is empty.");
             return false;
         }
-        actionProcess.command = ["kdeconnect-cli", "-d", deviceId, "--share-text", text];
-        actionProcess.running = true;
-        return true;
+        return runAction(deviceId, ["kdeconnect-cli", "-d", deviceId, "--share-text", text], "Text sent");
     }
 
     function fetchRemoteCommands(deviceId) {
         var dev = getDevice(deviceId);
-        if (!dev || !dev.reachable) {
+        if (!canAct(dev)) {
             console.log("Cannot fetch remote commands: device is offline or unreachable.");
             root.remoteCommands = [];
             root.fetchingCommands = false;
@@ -298,7 +275,7 @@ Item {
 
     function executeRemoteCommand(deviceId, key) {
         var dev = getDevice(deviceId);
-        if (!dev || !dev.reachable) {
+        if (!canAct(dev) || actionProcess.running) {
             console.log("Cannot execute remote command: device is offline or unreachable.");
             return false;
         }
@@ -306,7 +283,25 @@ Item {
             console.log("Cannot execute remote command: key is empty.");
             return false;
         }
-        actionProcess.command = ["kdeconnect-cli", "-d", deviceId, "--execute-command", key.trim()];
+        return runAction(deviceId, ["kdeconnect-cli", "-d", deviceId, "--execute-command", key.trim()], "Command executed");
+    }
+
+    function canAct(dev) {
+        return !!(dev && dev.id && dev.paired === true && dev.reachable === true);
+    }
+
+    function redactedError(text) {
+        var value = String(text || "").replace(/[\r\n]+/g, " ").trim();
+        return value.length > 180 ? value.substring(0, 177) + "..." : value;
+    }
+
+    function runAction(deviceId, command, successText) {
+        actionTargetDeviceId = deviceId;
+        actionProcess.targetGeneration = actionGeneration;
+        actionProcess.successText = successText;
+        actionProcess.command = command;
+        lastActionError = "";
+        statusMessage = "Working...";
         actionProcess.running = true;
         return true;
     }
@@ -398,6 +393,7 @@ Item {
                 listCommandsProcess.pendingOutput += line + "\n";
             }
         }
+        stderr: StdioCollector { id: listCommandsError; waitForEnd: true }
 
         onExited: (exitCode, exitStatus) => {
             root.fetchingCommands = false;
@@ -405,6 +401,8 @@ Item {
                 root.remoteCommands = root.parseRemoteCommandsOutput(listCommandsProcess.pendingOutput);
             } else {
                 root.remoteCommands = [];
+                root.statusMessage = root.redactedError(listCommandsError.text)
+                    || "Could not list remote commands (exit code " + exitCode + ")";
             }
         }
     }
@@ -442,6 +440,22 @@ Item {
         id: actionProcess
         command: []
         running: false
+        property int targetGeneration: 0
+        property string successText: "Action completed"
+        stdout: StdioCollector { id: actionStdout; waitForEnd: true }
+        stderr: StdioCollector { id: actionStderr; waitForEnd: true }
+        onExited: function(exitCode, exitStatus) {
+            if (targetGeneration !== root.actionGeneration || targetDeviceId !== root.actionTargetDeviceId) return;
+            if (exitCode === 0) {
+                root.statusMessage = successText;
+                root.lastActionError = "";
+            } else {
+                root.lastActionError = root.redactedError(actionStderr.text);
+                root.statusMessage = root.lastActionError !== ""
+                    ? root.lastActionError : "Action failed (exit code " + exitCode + ")";
+            }
+        }
+        property string targetDeviceId: root.actionTargetDeviceId
     }
 
     Process {
@@ -449,6 +463,7 @@ Item {
         property string targetDeviceId: ""
         command: []
         running: false
+        stderr: StdioCollector { id: pairError; waitForEnd: true }
 
         stdout: SplitParser {
             onRead: line => {
@@ -460,6 +475,7 @@ Item {
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode !== 0) {
+                root.statusMessage = root.redactedError(pairError.text) || "Pair request failed (exit code " + exitCode + ")";
                 var st = root.getPairingState(pairProcess.targetDeviceId);
                 if (st === "pending") {
                     root.setPairingState(pairProcess.targetDeviceId, "failed");
@@ -473,8 +489,11 @@ Item {
         property string targetDeviceId: ""
         command: []
         running: false
+        stderr: StdioCollector { id: unpairError; waitForEnd: true }
 
         onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) root.statusMessage = root.redactedError(unpairError.text)
+                || "Unpair request failed (exit code " + exitCode + ")";
             root.refresh();
         }
     }
@@ -547,34 +566,6 @@ Item {
             if (trimmed === "") return;
 
             // Direct line format check 1: NOTIF:deviceId:appName:title:body
-            if (trimmed.startsWith("NOTIF:")) {
-                var parts = trimmed.split(":");
-                if (parts.length >= 5) {
-                    var nDevId = parts[1];
-                    var nApp = parts[2];
-                    var nTitle = parts[3];
-                    var nBody = parts.slice(4).join(":");
-                    addNotification({
-                        deviceId: nDevId,
-                        appName: nApp,
-                        title: nTitle,
-                        body: nBody
-                    });
-                }
-                return;
-            }
-
-            // Direct line format check 2: JSON format {"deviceId":..., "appName":...}
-            if (trimmed.startsWith("{") && trimmed.endsWith("}") && (trimmed.indexOf("appName") !== -1 || trimmed.indexOf("title") !== -1 || trimmed.indexOf("body") !== -1)) {
-                try {
-                    var obj = JSON.parse(trimmed);
-                    if (obj && (obj.appName || obj.title || obj.body)) {
-                        addNotification(obj);
-                        return;
-                    }
-                } catch (e) {}
-            }
-
             // D-Bus Monitor signal line header check
             if (trimmed.startsWith("signal ") || trimmed.indexOf("member=") !== -1) {
                 flushPendingNotificationArgs();
@@ -589,21 +580,21 @@ Item {
                 }
 
                 pendingNotifArgs = [];
+                pendingRefreshedCharging = null;
 
                 if (pendingMonitorMember === "deviceAdded" || pendingMonitorMember === "deviceRemoved" || pendingMonitorMember === "deviceVisibilityChanged" || pendingMonitorMember === "reachableChanged" || pendingMonitorMember === "deviceListChanged" || pendingMonitorMember === "pairStateChanged") {
                     root.triggerPresenceRefresh();
-                } else if (pendingMonitorMember === "chargeChanged" || pendingMonitorMember === "stateChanged") {
+                } else if (pendingMonitorMember === "chargeChanged" || pendingMonitorMember === "stateChanged"
+                           || pendingMonitorMember === "refreshed") {
                     root.triggerBatteryRefresh();
                 }
                 return;
             }
 
             // Signal argument lines for notification members
-            if (pendingMonitorMember === "notificationAdded" ||
-                pendingMonitorMember === "displayNotification" ||
-                pendingMonitorMember === "notificationPosted" ||
-                pendingMonitorMember === "notificationReceived" ||
-                pendingMonitorMember === "receiveNotification") {
+            if (pendingMonitorMember === "notificationPosted" ||
+                pendingMonitorMember === "notificationRemoved" ||
+                pendingMonitorMember === "notificationUpdated") {
 
                 if (trimmed.startsWith('string "')) {
                     var qStart = trimmed.indexOf('"');
@@ -620,26 +611,33 @@ Item {
             }
 
             if (pendingMonitorDevId !== "" && pendingMonitorMember !== "") {
-                if (pendingMonitorMember === "chargeChanged" && trimmed.indexOf("int32") !== -1) {
+                if ((pendingMonitorMember === "chargeChanged" || pendingMonitorMember === "refreshed") && trimmed.indexOf("int32") !== -1) {
                     var numMatch = trimmed.match(/int32\s+([0-9]+)/);
                     if (numMatch && numMatch.length > 1) {
                         var cVal = parseInt(numMatch[1]);
                         var dObj = getDevice(pendingMonitorDevId);
-                        var curChg = dObj ? (dObj.isCharging || false) : false;
+                        var curChg = pendingMonitorMember === "refreshed" && pendingRefreshedCharging !== null
+                            ? pendingRefreshedCharging : (dObj ? (dObj.isCharging || false) : false);
                         updateDeviceBattery(pendingMonitorDevId, cVal, curChg);
                     }
                     pendingMonitorDevId = "";
                     pendingMonitorMember = "";
-                } else if (pendingMonitorMember === "stateChanged" && trimmed.indexOf("boolean") !== -1) {
+                    pendingRefreshedCharging = null;
+                } else if ((pendingMonitorMember === "stateChanged" || pendingMonitorMember === "refreshed") && trimmed.indexOf("boolean") !== -1) {
                     var boolMatch = trimmed.match(/boolean\s+(true|false)/);
                     if (boolMatch && boolMatch.length > 1) {
                         var isChg = boolMatch[1] === "true";
+                        if (pendingMonitorMember === "refreshed") {
+                            pendingRefreshedCharging = isChg;
+                            return;
+                        }
                         var dObj2 = getDevice(pendingMonitorDevId);
                         var curLvl = dObj2 ? (dObj2.batteryLevel !== undefined ? dObj2.batteryLevel : -1) : -1;
                         updateDeviceBattery(pendingMonitorDevId, curLvl, isChg);
                     }
                     pendingMonitorDevId = "";
                     pendingMonitorMember = "";
+                    pendingRefreshedCharging = null;
                 }
             }
         } catch (err) {
@@ -651,7 +649,7 @@ Item {
     // --- Process 3: Fetch and Parse Devices from kdeconnect-cli ---
     Process {
         id: deviceCheckProcess
-        command: ["kdeconnect-cli", "-l"]
+        command: ["kdeconnect-cli", "--list-devices"]
         running: false
 
         stdout: SplitParser {
@@ -689,6 +687,9 @@ Item {
                     var rest = content.substring(colonIdx + 1).trim();
                     var parenIdx = rest.indexOf("(");
                     var id = (parenIdx > 0 ? rest.substring(0, parenIdx) : rest).trim();
+                    var onIndex = id.indexOf(" on ");
+                    if (onIndex > 0) id = id.substring(0, onIndex).trim();
+                    if (id.indexOf(" ") !== -1) id = id.split(/\s+/)[0];
                     var status = parenIdx > 0 ? rest.substring(parenIdx + 1, rest.lastIndexOf(")")) : "";
 
                     var isReachable = status.indexOf("reachable") !== -1 || status.indexOf("connected") !== -1;
@@ -816,7 +817,7 @@ Item {
         }
 
         var cmd = ["bash", "-c",
-            'for id in "$@"; do charge=$(gdbus call --session --dest org.kde.kdeconnect --object-path /modules/kdeconnect/devices/$id/battery --method org.kde.kdeconnect.device.battery.charge 2>/dev/null | grep -oE "[0-9]+" || echo "-1"); charging=$(gdbus call --session --dest org.kde.kdeconnect --object-path /modules/kdeconnect/devices/$id/battery --method org.kde.kdeconnect.device.battery.isCharging 2>/dev/null | grep -o "true" || echo "false"); echo "BATTERY:$id:$charge:$charging"; done',
+            'for id in "$@"; do charge=$(gdbus call --session --dest org.kde.kdeconnect --object-path /modules/kdeconnect/devices/$id/battery --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery charge 2>/dev/null | grep -oE "[0-9]+" | head -n 1 || true); charging=$(gdbus call --session --dest org.kde.kdeconnect --object-path /modules/kdeconnect/devices/$id/battery --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery isCharging 2>/dev/null | grep -q "true" && echo true || echo false); echo "BATTERY:$id:${charge:--1}:$charging"; done',
             "inline_script"
         ];
         for (var j = 0; j < ids.length; j++) {
@@ -889,13 +890,27 @@ Item {
     }
 
     Component.onCompleted: {
-        refresh();
+        if (root.active) refresh();
     }
 
     Timer {
         interval: 10000
-        running: true
+        running: root.active
         repeat: true
         onTriggered: refresh()
+    }
+
+    onActiveChanged: {
+        if (root.active) {
+            refresh();
+            return;
+        }
+        debounceRefreshTimer.stop();
+        debounceBatteryTimer.stop();
+        monitorRecoveryTimer.stop();
+        if (healthCheckProcess.running) healthCheckProcess.running = false;
+        if (deviceCheckProcess.running) deviceCheckProcess.running = false;
+        if (batteryCheckProcess.running) batteryCheckProcess.running = false;
+        if (presenceMonitorProcess.running) presenceMonitorProcess.running = false;
     }
 }

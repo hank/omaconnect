@@ -7,6 +7,7 @@ Item {
 
     // --- Public Properties ---
     property var activeDevice: null
+    property var actionRunner: null
     property var commandList: []
     property bool isLoading: false
     property string executingKey: ""
@@ -29,8 +30,20 @@ Item {
         executingKey = "";
         statusMessage = "";
         statusType = "";
-        if (isDeviceReachable) {
+        if (isDeviceReachable && !root.actionRunner) {
             fetchCommands();
+        }
+        if (root.actionRunner) root.commandList = root.actionRunner.remoteCommands || [];
+    }
+
+    Connections {
+        target: root.actionRunner
+        function onRemoteCommandsChanged() { root.commandList = root.actionRunner.remoteCommands || [] }
+        function onFetchingCommandsChanged() { root.isLoading = root.actionRunner.fetchingCommands }
+        function onStatusMessageChanged() {
+            if (root.actionRunner && root.actionRunner.statusMessage)
+                root.setStatus(root.actionRunner.statusMessage,
+                    root.actionRunner.lastActionError ? "error" : "success");
         }
     }
 
@@ -105,6 +118,10 @@ Item {
             return;
         }
 
+        if (root.actionRunner) {
+            root.actionRunner.fetchRemoteCommands(activeDevice.id);
+            return;
+        }
         listProcess.running = false;
         listProcess.pendingOutput = "";
         listProcess.targetDeviceId = activeDevice.id;
@@ -118,6 +135,12 @@ Item {
         if (!isDeviceReachable || executingKey !== "") return;
         if (!activeDevice || !activeDevice.id || !key) return;
 
+        if (root.actionRunner) {
+            executingKey = key;
+            setStatus("Executing '" + name + "'...", "info");
+            root.actionRunner.executeRemoteCommand(activeDevice.id, key);
+            return;
+        }
         executingKey = key;
         executeProcess.currentKey = key;
         executeProcess.currentName = name;

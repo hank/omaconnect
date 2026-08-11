@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
-
-PanelWindow {
+Item {
     id: root
 
     property bool isConnected: false
@@ -15,6 +13,7 @@ PanelWindow {
     property bool isOpen: false
     property var pairingStates: ({})
     property var notifications: []
+    property var actionRunner: null
 
     function getPairingState(deviceId) {
         if (!deviceId || !pairingStates) return "idle";
@@ -33,9 +32,6 @@ PanelWindow {
     signal clearAllNotificationsRequested()
 
 
-    visible: root.isOpen
-    color: "transparent"
-
     onIsOpenChanged: {
         if (root.isOpen) {
             cardContainer.forceActiveFocus();
@@ -44,15 +40,11 @@ PanelWindow {
 
     implicitWidth: 360
     implicitHeight: Math.min(600, cardContainer.implicitHeight)
-
-    anchors {
-        top: true
-        right: true
-    }
+    width: parent ? parent.width : implicitWidth
 
     Rectangle {
         id: cardContainer
-        width: parent.width
+        width: root.width
         implicitHeight: mainHeaderColumn.implicitHeight + scrollArea.implicitHeight + 32
         color: Theme.bgGlass
         radius: Theme.radiusMd
@@ -339,6 +331,7 @@ PanelWindow {
                         ActionGrid {
                             id: actionGrid
                             activeDevice: root.activeDevice
+                            actionRunner: root.actionRunner
                             Layout.fillWidth: true
                         }
 
@@ -346,6 +339,7 @@ PanelWindow {
                         CommandRunner {
                             id: commandRunner
                             activeDevice: root.activeDevice
+                            actionRunner: root.actionRunner
                             Layout.fillWidth: true
                         }
 
@@ -363,5 +357,3 @@ PanelWindow {
         }
     }
 }
-
-

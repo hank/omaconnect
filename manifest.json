@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "omaconnect",
+  "name": "OmaConnect",
+  "version": "1.0.0",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  }
+}

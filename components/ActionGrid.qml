@@ -7,6 +7,7 @@ Item {
 
     // --- Public Properties ---
     property var activeDevice: null
+    property var actionRunner: null
 
     // --- Device Status Helper ---
     readonly property bool isDeviceReachable: activeDevice !== null && activeDevice !== undefined && activeDevice.reachable === true && activeDevice.paired === true
@@ -45,11 +46,7 @@ Item {
         accumulatedPasteText = "";
         actionStatusMessage = "";
         actionStatusType = "";
-        if (ringProcess.running) ringProcess.running = false;
-        if (pingProcess.running) pingProcess.running = false;
-        if (shareProcess.running) shareProcess.running = false;
         if (pasteProcess.running) pasteProcess.running = false;
-        if (fileProcess.running) fileProcess.running = false;
     }
 
     onIsDeviceReachableChanged: {
@@ -59,11 +56,7 @@ Item {
             pingInProgress = false;
             shareInProgress = false;
             pasteInProgress = false;
-            if (ringProcess.running) ringProcess.running = false;
-            if (pingProcess.running) pingProcess.running = false;
-            if (shareProcess.running) shareProcess.running = false;
             if (pasteProcess.running) pasteProcess.running = false;
-            if (fileProcess.running) fileProcess.running = false;
             setStatus("⚠️ Device unreachable. Actions disabled.", "error");
         }
     }
@@ -87,50 +80,20 @@ Item {
         statusTimer.restart();
     }
 
-    // --- Process 1: Ring Phone Process ---
-    Process {
-        id: ringProcess
-        running: false
-        property string targetDeviceId: ""
-
-        onExited: (exitCode, exitStatus) => {
+    Connections {
+        target: root.actionRunner
+        function onStatusMessageChanged() {
             root.ringInProgress = false;
-            if (targetDeviceId !== "" && (!activeDevice || activeDevice.id !== targetDeviceId)) return;
-            if (exitCode === 0) {
-                root.isRinging = !root.isRinging;
-                var devName = root.activeDevice ? root.activeDevice.name : "Device";
-                if (root.isRinging) {
-                    root.setStatus("🔔 Ringing signal sent to " + devName, "success");
-                } else {
-                    root.setStatus("🔕 Stopped ringing " + devName, "info");
-                }
-            } else {
-                root.isRinging = false;
-                root.setStatus("⚠️ Failed to ring device (exit code " + exitCode + ")", "error");
-            }
-        }
-    }
-
-    // --- Process 2: Send Ping Process ---
-    Process {
-        id: pingProcess
-        running: false
-        property string targetDeviceId: ""
-
-        onExited: (exitCode, exitStatus) => {
             root.pingInProgress = false;
-            if (targetDeviceId !== "" && (!activeDevice || activeDevice.id !== targetDeviceId)) return;
-            if (exitCode === 0) {
-                var devName = root.activeDevice ? root.activeDevice.name : "Device";
-                root.setStatus("📡 Notification ping sent to " + devName, "success");
-                root.showPingInput = false;
-            } else {
-                root.setStatus("⚠️ Failed to send ping (exit code " + exitCode + ")", "error");
-            }
+            root.shareInProgress = false;
+            root.fileInProgress = false;
+            if (root.actionRunner && root.actionRunner.statusMessage)
+                root.setStatus(root.actionRunner.statusMessage,
+                    root.actionRunner.lastActionError ? "error" : "success");
         }
     }
 
-    // --- Process 3: Paste Wayland Clipboard Process ---
+    // --- Clipboard read process ---
     Process {
         id: pasteProcess
         command: ["bash", "-c", "which wl-paste >/dev/null 2>&1 || exit 127; wl-paste --no-newline 2>/dev/null || wl-paste 2>/dev/null"]
@@ -162,63 +125,13 @@ Item {
         }
     }
 
-    // --- Process 4: Share Clipboard Text Process ---
-    Process {
-        id: shareProcess
-        command: []
-        running: false
-        property string targetDeviceId: ""
-
-        onExited: (exitCode, exitStatus) => {
-            root.shareInProgress = false;
-            if (targetDeviceId !== "" && (!activeDevice || activeDevice.id !== targetDeviceId)) return;
-            if (exitCode === 0) {
-                var devName = root.activeDevice ? root.activeDevice.name : "Device";
-                root.setStatus("🔗 Clipboard / Link sent to " + devName, "success");
-                root.showClipboardInput = false;
-                root.clipboardText = "";
-            } else {
-                root.setStatus("⚠️ Failed to send clipboard text (exit code " + exitCode + ")", "error");
-            }
-        }
-    }
-
-    // Process 5: Native file chooser and transfer helper
-    Process {
-        id: fileProcess
-        command: []
-        running: false
-        property string targetDeviceId: ""
-
-        onExited: (exitCode, exitStatus) => {
-            var target = fileProcess.targetDeviceId;
-            root.fileInProgress = false;
-            if (target !== "" && (!activeDevice || activeDevice.id !== target)) return;
-            if (exitCode === 0) {
-                root.setStatus("File transfer started", "success");
-            } else if (exitCode === 3) {
-                // Cancellation is intentionally quiet so the popover remains usable.
-                root.setStatus("", "");
-            } else if (exitCode === 2) {
-                root.setStatus("No file picker found (install kdialog or zenity).", "error");
-            } else if (exitCode === 4) {
-                root.setStatus("Selected file is missing or unreadable.", "error");
-            } else {
-                root.setStatus("File transfer failed (exit code " + exitCode + ").", "error");
-            }
-        }
-    }
-
     // --- Actions ---
     function triggerRing() {
         if (!isDeviceReachable || ringInProgress) return;
         if (!activeDevice || !activeDevice.id) return;
-
         ringInProgress = true;
-        ringProcess.targetDeviceId = activeDevice.id;
-        setStatus("Ringing device...", "info");
-        ringProcess.command = ["kdeconnect-cli", "-d", activeDevice.id, "--ring"];
-        ringProcess.running = true;
+        setStatus("Sending ring request...", "info");
+        if (root.actionRunner) root.actionRunner.ringDevice(activeDevice.id);
     }
 
     function triggerPing(customMessage) {
@@ -227,10 +140,8 @@ Item {
 
         var msg = (customMessage && customMessage.trim().length > 0) ? customMessage.trim() : pingText;
         pingInProgress = true;
-        pingProcess.targetDeviceId = activeDevice.id;
         setStatus("Sending ping to device...", "info");
-        pingProcess.command = ["kdeconnect-cli", "-d", activeDevice.id, "--ping-msg", msg];
-        pingProcess.running = true;
+        if (root.actionRunner) root.actionRunner.pingDevice(activeDevice.id, msg);
     }
 
     function pasteClipboard() {
@@ -256,10 +167,8 @@ Item {
         }
 
         shareInProgress = true;
-        shareProcess.targetDeviceId = activeDevice.id;
         setStatus("Sending text to device...", "info");
-        shareProcess.command = ["kdeconnect-cli", "-d", activeDevice.id, "--share-text", text];
-        shareProcess.running = true;
+        if (root.actionRunner) root.actionRunner.shareText(activeDevice.id, text);
     }
 
     property bool fileInProgress: false
@@ -268,13 +177,8 @@ Item {
         if (!isDeviceReachable || fileInProgress || !activeDevice || !activeDevice.id) return;
 
         fileInProgress = true;
-        fileProcess.targetDeviceId = activeDevice.id;
         setStatus("Choose a file to share...", "info");
-        // Resolve the helper from the plugin directory instead of depending on cwd.
-        var helperPath = Qt.resolvedUrl("../scripts/share_file.sh").toString();
-        if (helperPath.indexOf("file://") === 0) helperPath = decodeURIComponent(helperPath.substring(7));
-        fileProcess.command = ["bash", helperPath, activeDevice.id];
-        fileProcess.running = true;
+        if (root.actionRunner) root.actionRunner.sendFile(activeDevice.id);
     }
 
     ColumnLayout {
