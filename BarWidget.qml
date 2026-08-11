@@ -358,14 +358,28 @@ BarWidget {
                     width: parent.width
                     implicitHeight: heroLayout.implicitHeight
 
-                    Row {
+                    Item {
                         id: heroLayout
                         width: parent.width
-                        spacing: Style.space(8)
+                        implicitHeight: Math.max(hero.implicitHeight, refreshButton.implicitHeight)
+
+                        Button {
+                            id: refreshButton
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconText: "󰑐"
+                            tooltipText: "Refresh"
+                            foreground: root.bar.foreground
+                            fontFamily: root.bar.fontFamily
+                            onClicked: if (root.service) root.service.refresh()
+                        }
 
                         Column {
                             id: hero
-                            width: Math.max(1, heroLayout.width - refreshButton.width - Style.space(8))
+                            anchors.left: parent.left
+                            anchors.right: refreshButton.left
+                            anchors.rightMargin: Style.space(8)
+                            anchors.verticalCenter: parent.verticalCenter
                             spacing: Style.space(2)
 
                             Text {
@@ -419,16 +433,6 @@ BarWidget {
                                 }
                             }
                         }
-
-                        Button {
-                            id: refreshButton
-                            anchors.verticalCenter: parent.verticalCenter
-                            iconText: "󰑐"
-                            tooltipText: "Refresh"
-                            foreground: root.bar.foreground
-                            fontFamily: root.bar.fontFamily
-                            onClicked: if (root.service) root.service.refresh()
-                        }
                     }
                 }
 
@@ -466,37 +470,28 @@ BarWidget {
                             }
                             onClicked: if (root.service) root.service.selectDevice(modelData.id)
                         }
-                        Row {
+                        Item {
                             id: row
                             anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                             anchors.leftMargin: Style.space(8); anchors.rightMargin: Style.space(8)
-                            spacing: Style.space(8)
-                            Text {
-                                text: modelData.name
-                                width: Math.max(1, row.width - rightActionItem.implicitWidth - statusItem.implicitWidth - 16)
-                                color: root.bar.foreground
-                                font.family: root.bar.fontFamily
-                                font.pixelSize: Style.font.body
-                                elide: Text.ElideRight
-                            }
-                            Item {
-                                id: statusItem
-                                width: statusText.implicitWidth
-                                height: statusText.implicitHeight
+                            implicitHeight: Math.max(nameText.implicitHeight, rightActionItem.implicitHeight) + Style.space(4)
+
+                            Row {
+                                id: rightActionItem
+                                anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
+                                spacing: Style.space(6)
+
                                 Text {
                                     id: statusText
                                     text: !modelData.paired ? "" : (!modelData.reachable ? "Offline" : "●")
                                     color: modelData.paired && modelData.reachable ? Color.accent : Qt.darker(root.bar.foreground, 1.5)
                                     font.family: root.bar.fontFamily
                                     font.pixelSize: Style.font.caption
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: text !== ""
                                 }
-                            }
-                            Item {
-                                id: rightActionItem
-                                width: actionRow.implicitWidth
-                                height: actionRow.implicitHeight
-                                anchors.verticalCenter: parent.verticalCenter
+
                                 Row {
                                     id: actionRow
                                     spacing: Style.space(4)
@@ -557,6 +552,19 @@ BarWidget {
                                         onClicked: root.requestUnpairConfirm(modelData.id)
                                     }
                                 }
+                            }
+
+                            Text {
+                                id: nameText
+                                anchors.left: parent.left
+                                anchors.right: rightActionItem.left
+                                anchors.rightMargin: Style.space(8)
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.name
+                                color: root.bar.foreground
+                                font.family: root.bar.fontFamily
+                                font.pixelSize: Style.font.body
+                                elide: Text.ElideRight
                             }
                         }
                     }
