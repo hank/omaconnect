@@ -10,5 +10,12 @@
   "entryPoints": {
     "barWidget": "BarWidget.qml",
     "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaConnect",
+    "description": "KDE Connect device state and safe actions",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right"
   }
 }

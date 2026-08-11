@@ -1,5 +1,4 @@
 import QtQuick
-import "./components" as Components
 
 Item {
     id: root
@@ -8,34 +7,36 @@ Item {
     property var manifest: null
     property var pluginRegistry: null
 
-    Components.KdeConnectController { id: controller }
+    KdeConnectController { id: controller }
+    onOmarchyPathChanged: controller.pluginPath = omarchyPath
 
     property alias daemonAvailable: controller.daemonAvailable
     property alias sessionBusAvailable: controller.sessionBusAvailable
-    property alias isConnected: controller.isConnected
-    property alias activeDeviceCount: controller.activeDeviceCount
-    property alias lowestBattery: controller.lowestBattery
-    property alias allDevices: controller.allDevices
+    property alias scanning: controller.scanning
+    property alias discoveryState: controller.discoveryState
+    property alias discoveryMessage: controller.discoveryMessage
+    property alias actionState: controller.actionState
+    property alias actionMessage: controller.actionMessage
+    property alias actionError: controller.actionError
+    property alias devices: controller.devices
     property alias reachableDevices: controller.reachableDevices
-    property alias activeDevice: controller.activeDevice
-    property alias statusMessage: controller.statusMessage
-    property alias pairingStates: controller.pairingStates
-    property alias notifications: controller.notifications
+    property alias selectedDeviceId: controller.selectedDeviceId
+    property alias selectedDevice: controller.selectedDevice
     property alias remoteCommands: controller.remoteCommands
-    property alias fetchingCommands: controller.fetchingCommands
-    property alias lastActionError: controller.lastActionError
-    property alias actionStatusMessage: controller.statusMessage
+    property alias commandsLoading: controller.commandsLoading
+    property alias pendingPairing: controller.pendingPairing
+    property alias capabilities: controller.capabilities
+    property alias fileBusy: controller.fileBusy
 
     function refresh() { controller.refresh() }
     function selectDevice(id) { controller.selectDevice(id) }
-    function ringDevice(id) { return controller.ringDevice(id) }
-    function pingDevice(id, message) { return controller.pingDevice(id, message) }
+    function pingDevice(id, text) { return controller.pingDevice(id, text) }
     function shareText(id, text) { return controller.shareText(id, text) }
-    function sendFile(id) { return controller.sendFile(id) }
     function fetchRemoteCommands(id) { return controller.fetchRemoteCommands(id) }
     function executeRemoteCommand(id, key) { return controller.executeRemoteCommand(id, key) }
     function pairDevice(id) { return controller.pairDevice(id) }
     function unpairDevice(id) { return controller.unpairDevice(id) }
-    function dismissNotification(id) { controller.dismissNotification(id) }
-    function clearAllNotifications() { controller.clearAllNotifications() }
+    function ringDevice(id) { return controller.ringDevice(id) }
+    function sendClipboard(id) { return controller.sendClipboard(id) }
+    function sendFile(id, path) { return controller.sendFile(id, path) }
 }
