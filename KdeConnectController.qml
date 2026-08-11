@@ -40,6 +40,12 @@ Item {
     function selectDevice(id) {
         var next = deviceById(id)
         if (!next) return
+        if (selectedDeviceId !== next.id) {
+            actionState = "idle"
+            actionMessage = ""
+            actionError = ""
+            fileBusy = false
+        }
         selectedDeviceId = next.id
         remoteCommands = []
         commandTargetId = ""
@@ -48,12 +54,30 @@ Item {
     }
 
     function safeError(exitCode, operation) {
-        return exitCode === 127 || exitCode === 69 ? operation + " unavailable" : operation + " failed"
+        if (exitCode === 127 || exitCode === 69) return operation + " unavailable"
+        if (exitCode === 2) return operation + " rejected"
+        if (exitCode === 3) return operation + " timed out"
+        return operation + " failed"
+    }
+
+    function setPendingPairing(id, state) {
+        var copy = Object.assign({}, pendingPairing)
+        if (state) {
+            copy[String(id)] = state
+        } else {
+            delete copy[String(id)]
+        }
+        pendingPairing = copy
     }
 
     function canAct(id) {
         var device = deviceById(id)
         return !!(device && device.paired && device.reachable)
+    }
+
+    function getScriptPath() {
+        var resolved = Qt.resolvedUrl("scripts/discover_devices.sh").toString().replace(/^file:\/\//, "")
+        return resolved
     }
 
     function refresh() {
@@ -64,8 +88,33 @@ Item {
         discoveryState = "checking"
         discoveryMessage = "Checking KDE Connect"
         scanProcess.targetGeneration = nextGeneration
-        scanProcess.command = ["bash", pluginPath + "/scripts/discover_devices.sh"]
+        scanProcess.command = ["bash", getScriptPath()]
         scanProcess.running = true
+    }
+
+    function deviceOverviewStatus(device) {
+        if (!device) return "No devices found"
+        if (!device.paired) return "Not paired"
+        if (!device.reachable) return "Paired, offline"
+        return "Paired & reachable"
+    }
+
+    function deviceBatteryText(device) {
+        if (!device || !device.capabilities || !device.capabilities.battery) return ""
+        if (device.battery < 0) return "Battery unavailable"
+        var charging = !!(device.isCharging || device.charging)
+        if (charging) return device.battery + "% • Charging"
+        if (device.battery <= 20) return device.battery + "% • Low battery"
+        return device.battery + "% • Discharging"
+    }
+
+    function deviceBatteryIcon(device) {
+        if (!device || !device.capabilities || !device.capabilities.battery || device.battery < 0) return "󰂑"
+        var charging = !!(device.isCharging || device.charging)
+        if (charging) return "󰂄"
+        if (device.battery <= 20) return "󰂃"
+        if (device.battery <= 50) return "󰁽"
+        return "󰁹"
     }
 
     function parseScanLine(line) {
@@ -81,6 +130,7 @@ Item {
             reachable: parts[5] === "true",
             battery: /^\d+$/.test(parts[6]) ? Number(parts[6]) : -1,
             isCharging: parts[7] === "true",
+            charging: parts[7] === "true",
             capabilities: {
                 battery: hasPlugin("kdeconnect_battery"),
                 ping: hasPlugin("kdeconnect_ping"),
@@ -111,8 +161,6 @@ Item {
         discoveryMessage = daemonAvailable
             ? (next.length ? "Device state is current" : "No KDE Connect devices")
             : "KDE Connect unavailable"
-        if (selectedDeviceId && canAct(selectedDeviceId) && deviceById(selectedDeviceId).capabilities.commands)
-            fetchRemoteCommands(selectedDeviceId)
     }
 
     function startAction(id, command, acceptedMessage, operation) {
@@ -120,6 +168,7 @@ Item {
             actionState = "blocked"
             actionError = "Device must be paired and reachable"
             actionMessage = ""
+            fileBusy = false
             return false
         }
         actionGeneration += 1
@@ -138,19 +187,33 @@ Item {
 
     function pingDevice(id, message) {
         var text = String(message || "").trim()
+        if (!text) {
+            actionState = "blocked"
+            actionError = "Message cannot be empty"
+            actionMessage = ""
+            return false
+        }
         var device = deviceById(id)
-        if (!text || !device || !device.capabilities.ping) return false
+        if (!device || !device.capabilities.ping || !canAct(id)) return false
         return startAction(id, ["kdeconnect-cli", "-d", String(id), "--ping-msg", text], "Ping request accepted", "ping")
     }
 
     function shareText(id, text) {
         var value = String(text || "").trim()
+        if (!value) {
+            actionState = "blocked"
+            actionError = "Message cannot be empty"
+            actionMessage = ""
+            return false
+        }
         var device = deviceById(id)
-        if (!value || !device || !device.capabilities.text) return false
+        if (!device || !device.capabilities.text || !canAct(id)) return false
         return startAction(id, ["kdeconnect-cli", "-d", String(id), "--share-text", value], "Text-share request accepted", "text share")
     }
 
     function ringDevice(id) {
+        var device = deviceById(id)
+        if (!device || !device.capabilities.ring) return false
         return startAction(id, ["kdeconnect-cli", "-d", String(id), "--ring"], "Ring request accepted", "ring")
     }
 
@@ -160,10 +223,36 @@ Item {
         return startAction(id, ["kdeconnect-cli", "-d", String(id), "--send-clipboard"], "Clipboard request accepted", "clipboard")
     }
 
-    function sendFile(id, path) {
-        var value = String(path || "")
+    function startFileSelection(id) {
         var device = deviceById(id)
-        if (!value || value.indexOf("\u0000") !== -1 || !device || !device.capabilities.file) return false
+        if (!device || !device.capabilities.file || !canAct(id)) return false
+        fileBusy = true
+        actionState = "busy"
+        actionMessage = "Selecting file"
+        actionError = ""
+        return true
+    }
+
+    function cancelFileSelection() {
+        fileBusy = false
+        actionState = "cancelled"
+        actionMessage = "File selection cancelled"
+        actionError = ""
+    }
+
+    function sendFile(id, path) {
+        var value = String(path || "").trim()
+        if (value.indexOf("file://") === 0) {
+            value = value.replace(/^file:\/\//, "")
+            try {
+                value = decodeURIComponent(value)
+            } catch (e) {}
+        }
+        var device = deviceById(id)
+        if (!value || value.indexOf("\u0000") !== -1 || !device || !device.capabilities.file) {
+            fileBusy = false
+            return false
+        }
         return startAction(id, ["kdeconnect-cli", "-d", String(id), "--share", value], "File-transfer request accepted", "file transfer")
     }
 
@@ -186,23 +275,38 @@ Item {
         var result = []
         try {
             var json = JSON.parse(source)
+            if (json === null || typeof json !== "object") return []
             var values = Array.isArray(json) ? json : Object.keys(json).map(function(key) {
                 return { key: key, name: json[key] }
             })
             values.forEach(function(item) {
-                if (typeof item === "string" && item.trim()) result.push({ key: item.trim(), name: item.trim() })
-                else if (item && (item.key || item.id || item.command))
-                    result.push({ key: String(item.key || item.id || item.command), name: String(item.name || item.label || item.title || item.key || item.id || item.command) })
+                if (typeof item === "string" && item.trim()) {
+                    result.push({ key: item.trim(), name: item.trim() })
+                } else if (item && typeof item === "object") {
+                    var k = item.key || item.id || item.command
+                    if (k !== undefined && k !== null) {
+                        var kStr = String(k).trim()
+                        if (kStr) {
+                            var n = item.name || item.label || item.title || kStr
+                            result.push({ key: kStr, name: String(n).trim() || kStr })
+                        }
+                    }
+                }
             })
             return result
         } catch (error) {
             source.split("\n").forEach(function(line) {
-                var value = line.replace(/^[-*]\s*/, "").trim()
-                if (!value || /^no commands/i.test(value)) return
+                var value = String(line || "").trim()
+                value = value.replace(/^[-*•]\s*|^\d+\.\s*/, "").trim()
+                if (!value || /no.*commands/i.test(value)) return
                 var split = value.indexOf(":")
-                result.push(split > 0
-                    ? { key: value.slice(0, split).trim(), name: value.slice(split + 1).trim() || value.slice(0, split).trim() }
-                    : { key: value, name: value })
+                if (split > 0) {
+                    var k = value.slice(0, split).trim()
+                    var n = value.slice(split + 1).trim()
+                    if (k) result.push({ key: k, name: n || k })
+                } else if (value) {
+                    result.push({ key: value, name: value })
+                }
             })
             return result
         }
@@ -218,7 +322,10 @@ Item {
     function pairDevice(id) {
         var device = deviceById(id)
         if (!device || pairProcess.running || actionProcess.running || !device.capabilities.pair) return false
-        pendingPairing = Object.assign({}, pendingPairing, (function() { var x = {}; x[id] = "requesting"; return x })())
+        setPendingPairing(id, "requesting")
+        actionState = "accepted"
+        actionMessage = "Pairing request accepted"
+        actionError = ""
         pairProcess.targetDeviceId = String(id)
         pairProcess.targetGeneration = generation
         pairProcess.command = ["kdeconnect-cli", "-d", String(id), "--pair"]
@@ -229,7 +336,7 @@ Item {
     function unpairDevice(id) {
         var device = deviceById(id)
         if (!device || pairProcess.running || actionProcess.running || !device.capabilities.pair) return false
-        pendingPairing = Object.assign({}, pendingPairing, (function() { var x = {}; x[id] = "removing"; return x })())
+        setPendingPairing(id, "removing")
         pairProcess.targetDeviceId = String(id)
         pairProcess.targetGeneration = generation
         pairProcess.command = ["kdeconnect-cli", "-d", String(id), "--unpair"]
@@ -241,7 +348,7 @@ Item {
         id: scanProcess
         property int targetGeneration: 0
         property int exitCode: -1
-        command: ["bash", "-c", "set -u; base=/modules/kdeconnect; ids=$(gdbus call --session --dest org.kde.kdeconnect --object-path $base --method org.kde.kdeconnect.daemon.devices false false | sed -e 's/.*\\[//' -e 's/\\].*//' -e \"s/'//g\" -e 's/,/\\n/g' -e 's/ //g'); get(){ gdbus call --session --dest org.kde.kdeconnect --object-path \"$base/devices/$1\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device \"$2\" 2>/dev/null | sed -E \"s/^\\(<([^>]*)>.*$/\\1/\"; }; for id in $ids; do [ -n \"$id\" ] || continue; path=\"$base/devices/$id\"; name=$(get \"$id\" name); type=$(get \"$id\" type); paired=$(get \"$id\" isPaired); reachable=$(get \"$id\" isReachable); supported=$(get \"$id\" supportedPlugins | tr -d \"[]' \"); plugins=; for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand; do if printf %s \"$supported\" | grep -qw \"$plugin\" && gdbus introspect --session --dest org.kde.kdeconnect --object-path \"$path/${plugin#kdeconnect_}\" >/dev/null 2>&1; then plugins=\"${plugins:+$plugins,}$plugin\"; fi; done; charge=-1; charging=false; if printf %s \"$plugins\" | grep -q kdeconnect_battery; then battery=\"$path/battery\"; charge=$(gdbus call --session --dest org.kde.kdeconnect --object-path \"$battery\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery charge 2>/dev/null | sed -E 's/^\\(<([0-9-]+)>.*$/\\1/'); charging=$(gdbus call --session --dest org.kde.kdeconnect --object-path \"$battery\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery isCharging 2>/dev/null | grep -q true && echo true || echo false); fi; printf 'DEVICE\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$id\" \"$name\" \"$type\" \"$paired\" \"$reachable\" \"$charge\" \"$charging\" \"$plugins\"; done"]
+        command: ["bash", "-c", "set -u; base=/modules/kdeconnect; ids=$(gdbus call --session --dest org.kde.kdeconnect --object-path $base --method org.kde.kdeconnect.daemon.devices false false | sed -e 's/.*\\[//' -e 's/\\].*//' -e \"s/'//g\" -e 's/,/\\n/g' -e 's/ //g'); get(){ gdbus call --session --dest org.kde.kdeconnect --object-path \"$base/devices/$1\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device \"$2\" 2>/dev/null | sed -E \"s/^\\(<([^>]*)>.*$/\\1/\"; }; for id in $ids; do [ -n \"$id\" ] || continue; path=\"$base/devices/$id\"; name=$(get \"$id\" name); type=$(get \"$id\" type); paired=$(get \"$id\" isPaired); reachable=$(get \"$id\" isReachable); supported=$(get \"$id\" supportedPlugins | tr -d \"[]' \"); plugins=; for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard; do if printf %s \"$supported\" | grep -qw \"$plugin\"; then plugins=\"${plugins:+$plugins,}$plugin\"; fi; done; charge=-1; charging=false; if printf %s \"$plugins\" | grep -q kdeconnect_battery; then battery=\"$path/battery\"; charge=$(gdbus call --session --dest org.kde.kdeconnect --object-path \"$battery\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery charge 2>/dev/null | sed -E 's/^\\(<([0-9-]+)>.*$/\\1/'); charging=$(gdbus call --session --dest org.kde.kdeconnect --object-path \"$battery\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery isCharging 2>/dev/null | grep -q true && echo true || echo false); fi; printf 'DEVICE\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$id\" \"$name\" \"$type\" \"$paired\" \"$reachable\" \"$charge\" \"$charging\" \"$plugins\"; done"]
         stdout: StdioCollector { waitForEnd: true }
         stderr: StdioCollector { waitForEnd: true }
         onExited: function(code) {
@@ -272,7 +379,7 @@ Item {
         property string operation: "action"
         stderr: StdioCollector { waitForEnd: true }
         onExited: function(code) {
-            if (targetGeneration !== root.actionGeneration) return
+            if (targetGeneration !== root.actionGeneration || targetDeviceId !== root.selectedDeviceId) return
             root.fileBusy = false
             root.actionState = code === 0 ? "accepted" : "failed"
             root.actionMessage = code === 0 ? acceptedMessage : ""
@@ -286,14 +393,23 @@ Item {
         property int targetGeneration: 0
         stderr: StdioCollector { waitForEnd: true }
         onExited: function(code) {
-            var copy = Object.assign({}, root.pendingPairing)
-            copy[targetDeviceId] = code === 0 ? "accepted" : "failed"
-            root.pendingPairing = copy
-            if (targetGeneration !== root.generation) return
-            root.actionState = code === 0 ? "accepted" : "failed"
-            root.actionMessage = code === 0 ? "Pairing request accepted" : ""
-            root.actionError = code === 0 ? "" : root.safeError(code, "pairing")
-            refresh()
+            var isPair = pairProcess.command && pairProcess.command.indexOf("--pair") !== -1
+            var op = isPair ? "pairing" : "unpairing"
+            root.setPendingPairing(targetDeviceId, code === 0 ? "accepted" : "failed")
+            if (targetGeneration !== root.generation || targetDeviceId !== root.selectedDeviceId) {
+                root.refresh()
+                return
+            }
+            if (code === 0) {
+                root.actionState = "accepted"
+                root.actionMessage = isPair ? "Pairing request accepted" : "Unpair request accepted"
+                root.actionError = ""
+            } else {
+                root.actionState = "failed"
+                root.actionMessage = ""
+                root.actionError = root.safeError(code, op)
+            }
+            root.refresh()
         }
     }
 

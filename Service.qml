@@ -8,7 +8,6 @@ Item {
     property var pluginRegistry: null
 
     KdeConnectController { id: controller }
-    onOmarchyPathChanged: controller.pluginPath = omarchyPath
 
     property alias daemonAvailable: controller.daemonAvailable
     property alias sessionBusAvailable: controller.sessionBusAvailable
@@ -38,5 +37,7 @@ Item {
     function unpairDevice(id) { return controller.unpairDevice(id) }
     function ringDevice(id) { return controller.ringDevice(id) }
     function sendClipboard(id) { return controller.sendClipboard(id) }
+    function startFileSelection(id) { return controller.startFileSelection(id) }
+    function cancelFileSelection() { return controller.cancelFileSelection() }
     function sendFile(id, path) { return controller.sendFile(id, path) }
 }

@@ -44,7 +44,7 @@ while IFS= read -r entry; do
     reachable=$(value "$(property "$path" org.kde.kdeconnect.device isReachable)") || exit 69
     supported=$(property "$path" org.kde.kdeconnect.device supportedPlugins) || exit 69
     plugins=
-    for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand; do
+    for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard; do
         if [[ "$supported" == *"'$plugin'"* || "$supported" == *"<$plugin>"* ]]; then
             plugins="${plugins:+$plugins,}$plugin"
         fi
