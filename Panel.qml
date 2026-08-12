@@ -48,6 +48,7 @@ KeyboardPanel {
         if (caps.ring) res.push("ring")
         if (caps.clipboard) res.push("clipboard")
         if (caps.file) res.push("file")
+        if (caps.sms) res.push("sms")
         if (caps.ping) res.push("ping")
         if (caps.text) res.push("text")
         return res
@@ -58,6 +59,7 @@ KeyboardPanel {
         if (actionId === "ring") service.ringDevice(device.id)
         else if (actionId === "clipboard") service.sendClipboard(device.id)
         else if (actionId === "file") service.startFileSelection(device.id)
+        else if (actionId === "sms") service.openSmsApp(device.id)
         else if (actionId === "ping") {
             if (activeComposer === "ping") closeComposer()
             else openComposer("ping")
@@ -67,6 +69,8 @@ KeyboardPanel {
             else openComposer("text")
         }
     }
+
+
 
     function requestUnpairConfirm(id) {
         unpairConfirmingId = id

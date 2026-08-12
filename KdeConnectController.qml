@@ -85,13 +85,20 @@ Item {
         return resolved
     }
 
+    function getSmsScriptPath() {
+        var resolved = Qt.resolvedUrl("scripts/open_sms.sh").toString().replace(/^file:\/\//, "")
+        return resolved
+    }
+
     function refresh(forceNetwork) {
         if (scanProcess.running) return
         var nextGeneration = generation + 1
         generation = nextGeneration
         scanning = true
-        discoveryState = "checking"
-        discoveryMessage = "Checking KDE Connect"
+        if (discoveryState !== "ready") {
+            discoveryState = "checking"
+            discoveryMessage = "Checking KDE Connect"
+        }
         scanProcess.targetGeneration = nextGeneration
         var cmd = ["bash", getScriptPath()]
         if (forceNetwork) cmd.push("--refresh")
@@ -107,12 +114,31 @@ Item {
     }
 
     function deviceBatteryText(device) {
-        if (!device || !device.capabilities || !device.capabilities.battery) return ""
-        if (device.battery < 0) return "Battery unavailable"
-        var charging = !!(device.isCharging || device.charging)
-        if (charging) return device.battery + "% • Charging"
-        if (device.battery <= 20) return device.battery + "% • Low battery"
-        return device.battery + "% • Discharging"
+        if (!device) return ""
+        var batteryText = ""
+        if (device.capabilities && device.capabilities.battery) {
+            if (device.battery < 0) {
+                batteryText = "Battery unavailable"
+            } else {
+                var charging = !!(device.isCharging || device.charging)
+                if (charging) batteryText = device.battery + "% • Charging"
+                else if (device.battery <= 20) batteryText = device.battery + "% • Low battery"
+                else batteryText = device.battery + "% • Discharging"
+            }
+        }
+        var netText = ""
+        if (device.networkType) {
+            var type = String(device.networkType).trim()
+            if (type && type !== "null") {
+                var str = device.networkStrength
+                if (typeof str === "number" && str >= 0) netText = type + " (" + str + "/4)"
+                else netText = type
+            }
+        }
+        if (batteryText && netText) return batteryText + " • " + netText
+        if (batteryText) return batteryText
+        if (netText) return netText
+        return ""
     }
 
     function deviceBatteryIcon(device) {
@@ -124,11 +150,35 @@ Item {
         return "󰁹"
     }
 
+    function deviceNetworkText(device) {
+        if (!device || !device.networkType) return ""
+        var type = String(device.networkType).trim()
+        if (!type || type === "null") return ""
+        var str = device.networkStrength
+        if (typeof str === "number" && str >= 0) return type + " (" + str + "/4)"
+        return type
+    }
+
+    function deviceNetworkIcon(device) {
+        if (!device || !device.networkType) return "󰀂"
+        var str = device.networkStrength
+        if (str === 4) return "󰤨"
+        if (str === 3) return "󰤥"
+        if (str === 2) return "󰤢"
+        if (str === 1) return "󰤟"
+        if (str === 0) return "󰤯"
+        return "󰀂"
+    }
+
     function parseScanLine(line) {
-        var parts = String(line || "").split("\t")
+        var cleanLine = String(line || "").trim()
+        var parts = cleanLine.split("\t")
         if (parts.length < 9 || parts[0] !== "DEVICE") return null
-        var plugins = String(parts[8]).split(",")
+        var plugins = String(parts[8] || "").split(",")
         function hasPlugin(name) { return plugins.indexOf(name) !== -1 }
+        var netType = parts.length > 9 ? String(parts[9] || "").trim() : ""
+        var netStrengthRaw = parts.length > 10 ? String(parts[10] || "").trim() : ""
+        var netStrength = /^\d+$/.test(netStrengthRaw) ? Number(netStrengthRaw) : -1
         return {
             id: parts[1],
             name: parts[2] || parts[1],
@@ -138,6 +188,8 @@ Item {
             battery: /^\d+$/.test(parts[6]) ? Number(parts[6]) : -1,
             isCharging: parts[7] === "true",
             charging: parts[7] === "true",
+            networkType: netType,
+            networkStrength: netStrength,
             capabilities: {
                 battery: hasPlugin("kdeconnect_battery"),
                 ping: hasPlugin("kdeconnect_ping"),
@@ -146,10 +198,20 @@ Item {
                 clipboard: hasPlugin("kdeconnect_clipboard"),
                 file: hasPlugin("kdeconnect_share"),
                 commands: hasPlugin("kdeconnect_runcommand"),
+                network: hasPlugin("kdeconnect_connectivity_report"),
+                sms: hasPlugin("kdeconnect_sms"),
                 pair: true
             }
         }
     }
+
+    function openSmsApp(id) {
+        var device = deviceById(id)
+        if (!device || !canAct(id)) return false
+        return startAction(id, ["bash", getSmsScriptPath(), String(id)], "SMS app opened", "SMS app")
+    }
+
+
 
     function applyScan(output, targetGeneration) {
         if (targetGeneration !== generation) return
@@ -424,13 +486,15 @@ Item {
         }
     }
 
+    Timer { id: dbusDebounceTimer; interval: 300; repeat: false; onTriggered: root.refresh() }
+
     Process {
         id: signalProcess
         command: ["dbus-monitor", "--session", "type='signal',sender='org.kde.kdeconnect'"]
         stdout: SplitParser { onRead: function(line) {
             var value = String(line || "")
             if (value.indexOf("device") !== -1 || value.indexOf("chargeChanged") !== -1 || value.indexOf("stateChanged") !== -1 || value.indexOf("refreshed") !== -1)
-                root.refresh()
+                dbusDebounceTimer.restart()
         } }
         onExited: {
             signalRestart.interval = Math.min(30000, 1000 * Math.pow(2, monitorRestartCount))
@@ -458,5 +522,5 @@ Item {
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
     Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
-    Component.onDestruction: { signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false }
+    Component.onDestruction: { dbusDebounceTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false }
 }

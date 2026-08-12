@@ -32,6 +32,8 @@ Column {
                 id: refreshButton
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
+                enabled: !root.service || !root.service.scanning
+                opacity: (root.service && root.service.scanning) ? 0.6 : 1.0
                 iconText: "󰑐"
                 tooltipText: "Refresh"
                 foreground: root.foreground
@@ -73,7 +75,7 @@ Column {
                 }
 
                 Row {
-                    visible: !!(root.device && root.device.capabilities && root.device.capabilities.battery)
+                    visible: !!(root.device && root.service && root.service.deviceBatteryText(root.device) !== "")
                     spacing: Style.space(6)
 
                     Text {
@@ -97,6 +99,8 @@ Column {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
+
+
             }
         }
     }

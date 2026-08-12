@@ -14,6 +14,8 @@ def parse_device(line):
     if len(parts) < 9 or parts[0] != "DEVICE":
         return None
     plugins = set(parts[8].split(","))
+    net_type = parts[9].strip() if len(parts) > 9 else ""
+    net_strength = int(parts[10]) if len(parts) > 10 and parts[10].isdigit() else -1
     return {
         "id": parts[1],
         "name": parts[2] or parts[1],
@@ -22,6 +24,8 @@ def parse_device(line):
         "reachable": parts[5] == "true",
         "battery": int(parts[6]) if parts[6].isdigit() else -1,
         "charging": parts[7] == "true",
+        "networkType": net_type,
+        "networkStrength": net_strength,
         "capabilities": {
             "battery": "kdeconnect_battery" in plugins,
             "ping": "kdeconnect_ping" in plugins,
@@ -30,6 +34,8 @@ def parse_device(line):
             "clipboard": "kdeconnect_clipboard" in plugins,
             "file": "kdeconnect_share" in plugins,
             "commands": "kdeconnect_runcommand" in plugins,
+            "network": "kdeconnect_connectivity_report" in plugins,
+            "sms": "kdeconnect_sms" in plugins,
             "pair": True,
         },
     }
@@ -65,6 +71,8 @@ def build_action_command(action_type, device_id, extra_arg=None):
         if not clean_path:
             return None
         return ["kdeconnect-cli", "-d", str(device_id), "--share", clean_path]
+    elif action_type == "sms":
+        return ["bash", "scripts/open_sms.sh", str(device_id)]
     elif action_type == "ping":
         is_valid, content = validate_composer_input(extra_arg)
         if not is_valid:
@@ -76,6 +84,46 @@ def build_action_command(action_type, device_id, extra_arg=None):
             return None
         return ["kdeconnect-cli", "-d", str(device_id), "--share-text", content]
     return None
+
+
+def format_network_status(device):
+    if not device or not device.get("networkType"):
+        return ""
+    net_type = str(device.get("networkType")).strip()
+    if not net_type or net_type == "null":
+        return ""
+    str_val = device.get("networkStrength", -1)
+    if isinstance(str_val, int) and str_val >= 0:
+        return f"{net_type} ({str_val}/4)"
+    return net_type
+
+
+def format_battery_status(device):
+    if not device:
+        return ""
+    battery_text = ""
+    if device.get("capabilities", {}).get("battery"):
+        battery = device.get("battery", -1)
+        if battery < 0:
+            battery_text = "Battery unavailable"
+        else:
+            charging = device.get("charging") or device.get("isCharging")
+            if charging:
+                battery_text = f"{battery}% • Charging"
+            elif battery <= 20:
+                battery_text = f"{battery}% • Low battery"
+            else:
+                battery_text = f"{battery}% • Discharging"
+    net_text = format_network_status(device)
+    if battery_text and net_text:
+        return f"{battery_text} • {net_text}"
+    if battery_text:
+        return battery_text
+    if net_text:
+        return net_text
+    return ""
+
+
 
 
 def validate_composer_input(text):
@@ -94,19 +142,6 @@ def format_overview_status(device):
         return "Paired, offline"
     return "Paired & reachable"
 
-
-def format_battery_status(device):
-    if not device or not device.get("capabilities", {}).get("battery"):
-        return ""
-    battery = device.get("battery", -1)
-    if battery < 0:
-        return "Battery unavailable"
-    charging = device.get("charging") or device.get("isCharging")
-    if charging:
-        return f"{battery}% • Charging"
-    if battery <= 20:
-        return f"{battery}% • Low battery"
-    return f"{battery}% • Discharging"
 
 
 def accept_completion(target_generation, current_generation, target_id, selected_id):
@@ -375,21 +410,25 @@ class PairingState:
 class StateTests(unittest.TestCase):
   def test_authoritative_snapshot_is_stable_and_capability_aware(self):
     # Full capability set
-    full_line = "DEVICE\tdev-full\tFull Phone\tphone\ttrue\ttrue\t100\ttrue\tkdeconnect_battery,kdeconnect_ping,kdeconnect_share,kdeconnect_runcommand,kdeconnect_findmyphone,kdeconnect_clipboard"
+    full_line = "DEVICE\tdev-full\tFull Phone\tphone\ttrue\ttrue\t100\ttrue\tkdeconnect_battery,kdeconnect_ping,kdeconnect_share,kdeconnect_runcommand,kdeconnect_findmyphone,kdeconnect_clipboard,kdeconnect_connectivity_report,kdeconnect_sms\t5G\t4"
     self.assertEqual(parse_device(full_line)["capabilities"], {
-        "battery": True, "ping": True, "ring": True, "text": True, "clipboard": True, "file": True, "commands": True, "pair": True
+        "battery": True, "ping": True, "ring": True, "text": True, "clipboard": True, "file": True, "commands": True, "network": True, "sms": True, "pair": True
     })
+    self.assertEqual(parse_device(full_line)["networkType"], "5G")
+    self.assertEqual(parse_device(full_line)["networkStrength"], 4)
+    self.assertEqual(format_network_status(parse_device(full_line)), "5G (4/4)")
+    self.assertEqual(format_battery_status(parse_device(full_line)), "100% • Charging • 5G (4/4)")
 
     # Partial capability set (ring & clipboard only)
     partial_line = "DEVICE\tdev-part\tPart Phone\tphone\ttrue\ttrue\t50\tfalse\tkdeconnect_findmyphone,kdeconnect_clipboard"
     self.assertEqual(parse_device(partial_line)["capabilities"], {
-        "battery": False, "ping": False, "ring": True, "text": False, "clipboard": True, "file": False, "commands": False, "pair": True
+        "battery": False, "ping": False, "ring": True, "text": False, "clipboard": True, "file": False, "commands": False, "network": False, "sms": False, "pair": True
     })
 
     # Empty / unloaded capability set
     empty_line = "DEVICE\tdev-empty\tEmpty Phone\tphone\tfalse\tfalse\t-1\tfalse\t"
     self.assertEqual(parse_device(empty_line)["capabilities"], {
-        "battery": False, "ping": False, "ring": False, "text": False, "clipboard": False, "file": False, "commands": False, "pair": True
+        "battery": False, "ping": False, "ring": False, "text": False, "clipboard": False, "file": False, "commands": False, "network": False, "sms": False, "pair": True
     })
 
     # Standard snapshot check
@@ -402,8 +441,12 @@ class StateTests(unittest.TestCase):
         "reachable": True,
         "battery": 95,
         "charging": False,
-        "capabilities": {"battery": True, "ping": True, "ring": False, "text": True, "clipboard": False, "file": True, "commands": False, "pair": True},
+        "networkType": "",
+        "networkStrength": -1,
+        "capabilities": {"battery": True, "ping": True, "ring": False, "text": True, "clipboard": False, "file": True, "commands": False, "network": False, "sms": False, "pair": True},
     })
+
+
 
   def test_primary_action_capability_gating_and_reachability(self):
     line_full = "DEVICE\tdev-1\tPhone\tphone\ttrue\ttrue\t80\tfalse\tkdeconnect_findmyphone,kdeconnect_clipboard,kdeconnect_share"
@@ -700,11 +743,17 @@ class StateTests(unittest.TestCase):
     self.assertTrue((ROOT / "Panel.qml").exists())
     self.assertTrue(any((ROOT / "components").rglob("*.qml")))
 
+  def test_service_forwards_all_controller_actions(self):
+    service_source = (ROOT / "Service.qml").read_text()
+    self.assertIn("openSmsApp", service_source)
+    self.assertIn("controller.openSmsApp", service_source)
+
+
   def test_no_privacy_product_claims_or_ui_processes(self):
     sources = "\n".join(path.read_text() for path in ROOT.glob("*.qml"))
     self.assertNotIn("notification", sources.lower())
-    self.assertNotIn("sms", sources.lower())
     self.assertNotIn("Process {", (ROOT / "BarWidget.qml").read_text())
+
 
   def test_shell_script_is_not_needed_for_file_sharing(self):
     self.assertFalse((ROOT / "scripts" / "share_file.sh").exists())
@@ -993,6 +1042,11 @@ class StateTests(unittest.TestCase):
     self.assertEqual(nav.focus_section, "commands")
     nav.key_right()
     self.assertEqual(nav.focus_section, "devices")
+
+  def test_refresh_does_not_reset_discovery_state_when_ready(self):
+    controller_source = (ROOT / "KdeConnectController.qml").read_text()
+    self.assertIn('if (discoveryState !== "ready")', controller_source)
+    self.assertIn('dbusDebounceTimer', controller_source)
 
 
 if __name__ == "__main__":

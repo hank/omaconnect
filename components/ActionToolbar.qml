@@ -25,7 +25,8 @@ Column {
         fontFamily: root.fontFamily
     }
 
-    Row {
+    Flow {
+        width: parent.width
         spacing: Style.space(6)
         Repeater {
             model: panel ? panel.availableActions() : []
@@ -36,10 +37,12 @@ Column {
                     if (modelData === "ring") return "Ring"
                     if (modelData === "clipboard") return "Clipboard"
                     if (modelData === "file") return "File"
+                    if (modelData === "sms") return "SMS"
                     if (modelData === "ping") return "Ping"
                     if (modelData === "text") return "Text"
                     return modelData
                 }
+
 
                 implicitWidth: actionBtnText.implicitWidth + Style.space(16)
                 implicitHeight: actionBtnText.implicitHeight + Style.space(8)

@@ -24,7 +24,7 @@ property() {
     local path=$1 interface=$2 name=$3 reply
     reply=$(gdbus call --session --dest org.kde.kdeconnect \
         --object-path "$path" --method org.freedesktop.DBus.Properties.Get \
-        "$interface" "$name") || return 1
+        "$interface" "$name" 2>/dev/null) || reply=""
     printf '%s\n' "$reply"
 }
 
@@ -50,11 +50,12 @@ while IFS= read -r entry; do
     reachable=$(value "$(property "$path" org.kde.kdeconnect.device isReachable)") || exit 69
     supported=$(property "$path" org.kde.kdeconnect.device supportedPlugins) || exit 69
     plugins=
-    for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard; do
+    for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard kdeconnect_connectivity_report kdeconnect_sms; do
         if [[ "$supported" == *"'$plugin'"* || "$supported" == *"<$plugin>"* ]]; then
             plugins="${plugins:+$plugins,}$plugin"
         fi
     done
+
     charge=-1
     charging=false
     if [[ "$plugins" == *kdeconnect_battery* ]]; then
@@ -64,6 +65,16 @@ while IFS= read -r entry; do
         charging_raw=$(value "$(property "$battery" org.kde.kdeconnect.device.battery isCharging)") || charging_raw=false
         [[ "$charging_raw" == true ]] && charging=true
     fi
-    printf 'DEVICE\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$id" "$name" "$type" "$paired" "$reachable" "$charge" "$charging" "$plugins"
+    net_type=
+    net_strength=-1
+    if [[ "$plugins" == *kdeconnect_connectivity_report* ]]; then
+        conn="$path/connectivity_report"
+        type_raw=$(value "$(property "$conn" org.kde.kdeconnect.device.connectivity_report cellularNetworkType)") || type_raw=""
+        strength_raw=$(value "$(property "$conn" org.kde.kdeconnect.device.connectivity_report cellularNetworkStrength)") || strength_raw=""
+        [[ -n "$type_raw" && "$type_raw" != "null" ]] && net_type=$type_raw
+        [[ "$strength_raw" =~ ^[0-9]+$ ]] && net_strength=$strength_raw
+    fi
+    printf 'DEVICE\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$id" "$name" "$type" "$paired" "$reachable" "$charge" "$charging" "$plugins" "$net_type" "$net_strength"
 done <<< "$entries"
+

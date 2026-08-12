@@ -40,7 +40,9 @@ Item {
     function startFileSelection(id) { return controller.startFileSelection(id) }
     function cancelFileSelection() { return controller.cancelFileSelection() }
     function sendFile(id, path) { return controller.sendFile(id, path) }
+    function openSmsApp(id) { return controller.openSmsApp(id) }
     function deviceOverviewStatus(device) { return controller.deviceOverviewStatus(device) }
     function deviceBatteryText(device) { return controller.deviceBatteryText(device) }
     function deviceBatteryIcon(device) { return controller.deviceBatteryIcon(device) }
 }
+
