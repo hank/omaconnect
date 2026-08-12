@@ -14,6 +14,12 @@ gdbus call --session --dest org.freedesktop.DBus \
     --method org.freedesktop.DBus.NameHasOwner org.kde.kdeconnect \
     | grep -q '(true,)' || exit 69
 
+if [[ "${1:-}" == "--refresh" || "${1:-}" == "-r" ]]; then
+    gdbus call --session --dest org.kde.kdeconnect \
+        --object-path /modules/kdeconnect \
+        --method org.kde.kdeconnect.daemon.forceOnNetworkChange >/dev/null 2>&1 || true
+fi
+
 property() {
     local path=$1 interface=$2 name=$3 reply
     reply=$(gdbus call --session --dest org.kde.kdeconnect \

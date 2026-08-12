@@ -180,7 +180,7 @@ BarWidget {
                     if (pending !== "removing") root.requestUnpairConfirm(dev.id)
                 }
             }
-        } else if (focusSection === "refresh") { if (service) service.refresh() }
+        } else if (focusSection === "refresh") { if (service) service.refresh(true) }
         else if (focusSection === "actions") {
             var acts = availableActions()
             if (acts.length > 0) {
@@ -254,7 +254,7 @@ BarWidget {
             onTabRequested: function(direction) { if (root.bar && typeof root.bar.switchPanelFrom === "function") root.bar.switchPanelFrom(root, direction) }
             onTextKey: function(value) {
                 var key = String(value).toLowerCase()
-                if (key === "r" && root.service) root.service.refresh()
+                if (key === "r" && root.service) root.service.refresh(true)
                 else if (key === "j" || key === "down") {
                     if (root.focusSection === "commands" && root.commandsExpanded) root.selectCommand(1)
                     else if (root.focusSection === "actions") {
@@ -371,7 +371,7 @@ BarWidget {
                             tooltipText: "Refresh"
                             foreground: root.bar.foreground
                             fontFamily: root.bar.fontFamily
-                            onClicked: if (root.service) root.service.refresh()
+                            onClicked: if (root.service) root.service.refresh(true)
                         }
 
                         Column {

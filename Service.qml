@@ -27,7 +27,7 @@ Item {
     property alias capabilities: controller.capabilities
     property alias fileBusy: controller.fileBusy
 
-    function refresh() { controller.refresh() }
+    function refresh(forceNetwork) { controller.refresh(forceNetwork) }
     function selectDevice(id) { controller.selectDevice(id) }
     function pingDevice(id, text) { return controller.pingDevice(id, text) }
     function shareText(id, text) { return controller.shareText(id, text) }

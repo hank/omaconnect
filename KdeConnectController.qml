@@ -80,7 +80,7 @@ Item {
         return resolved
     }
 
-    function refresh() {
+    function refresh(forceNetwork) {
         if (scanProcess.running) return
         var nextGeneration = generation + 1
         generation = nextGeneration
@@ -88,7 +88,9 @@ Item {
         discoveryState = "checking"
         discoveryMessage = "Checking KDE Connect"
         scanProcess.targetGeneration = nextGeneration
-        scanProcess.command = ["bash", getScriptPath()]
+        var cmd = ["bash", getScriptPath()]
+        if (forceNetwork) cmd.push("--refresh")
+        scanProcess.command = cmd
         scanProcess.running = true
     }
 
