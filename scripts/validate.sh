@@ -7,17 +7,37 @@ cd "$repo_dir"
 python3 -m unittest -q tests/test_state.py
 bash -n scripts/validate.sh
 
-validator=/home/sastauser/code/temp/omarchy/bin/omarchy-plugin-validate
-if [ -x "$validator" ]; then "$validator" .; else printf '%s\n' "exact Omarchy validator unavailable; skipped"; fi
+validator=""
+if command -v omarchy-plugin-validate >/dev/null 2>&1; then
+    validator="$(command -v omarchy-plugin-validate)"
+elif [ -n "${OMARCHY_PATH:-}" ] && [ -x "${OMARCHY_PATH}/bin/omarchy-plugin-validate" ]; then
+    validator="${OMARCHY_PATH}/bin/omarchy-plugin-validate"
+elif [ -x "/home/sastauser/code/temp/omarchy/bin/omarchy-plugin-validate" ]; then
+    validator="/home/sastauser/code/temp/omarchy/bin/omarchy-plugin-validate"
+fi
+
+if [ -n "$validator" ] && [ -x "$validator" ]; then
+    "$validator" .
+else
+    printf '%s\n' "exact Omarchy validator unavailable; skipped"
+fi
 
 if command -v qmllint >/dev/null 2>&1; then
     qml_output="$(mktemp)"
     trap 'rm -f "$qml_output"' EXIT
     set +e
-    qmllint -I /home/sastauser/code/temp/omarchy/shell \
-        -I /home/sastauser/code/temp/omarchy/shell/Ui \
-        -I /home/sastauser/code/temp/omarchy/shell/Commons \
-        Service.qml BarWidget.qml KdeConnectController.qml >"$qml_output" 2>&1
+    omarchy_shell="${OMARCHY_PATH:-/home/sastauser/code/temp/omarchy}/shell"
+    
+    qml_files=(Service.qml BarWidget.qml KdeConnectController.qml)
+    if [ -f Panel.qml ]; then qml_files+=(Panel.qml); fi
+    for file in components/*.qml; do
+        if [ -f "$file" ]; then qml_files+=("$file"); fi
+    done
+
+    qmllint -I "$omarchy_shell" \
+        -I "$omarchy_shell/Ui" \
+        -I "$omarchy_shell/Commons" \
+        "${qml_files[@]}" >"$qml_output" 2>&1
     status=$?
     set -e
     if [ "$status" -ne 0 ]; then
@@ -27,7 +47,7 @@ if command -v qmllint >/dev/null 2>&1; then
     elif grep -q 'Warning:' "$qml_output"; then
         printf '%s\n' "qmllint emitted host-import/unqualified-type diagnostics; not claimed warning-free"
         printf '%s\n' "QML loader/runtime verification is the authoritative error check"
-    else
+        else
         printf '%s\n' "qmllint completed without diagnostics"
     fi
 else

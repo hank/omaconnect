@@ -680,13 +680,13 @@ class StateTests(unittest.TestCase):
     self.assertIn("unpairDevice", source)
     self.assertIn('"Pairing request accepted"', source)
 
-    bar_source = (ROOT / "BarWidget.qml").read_text()
-    self.assertIn("unpairConfirmingId", bar_source)
-    self.assertIn("requestUnpairConfirm", bar_source)
-    self.assertIn("cancelUnpairConfirm", bar_source)
-    self.assertIn("confirmUnpair", bar_source)
-    self.assertIn("devicePendingState", bar_source)
-    self.assertIn("isUnpairConfirming", bar_source)
+    ui_source = (ROOT / "Panel.qml").read_text() + "\n" + "\n".join(p.read_text() for p in (ROOT / "components").glob("*.qml"))
+    self.assertIn("unpairConfirmingId", ui_source)
+    self.assertIn("requestUnpairConfirm", ui_source)
+    self.assertIn("cancelUnpairConfirm", ui_source)
+    self.assertIn("confirmUnpair", ui_source)
+    self.assertIn("devicePendingState", ui_source)
+    self.assertIn("isUnpairConfirming", ui_source)
 
   def test_stale_completion_is_ignored(self):
     self.assertFalse(accept_completion(4, 5, "old", "old"))
@@ -697,7 +697,8 @@ class StateTests(unittest.TestCase):
     manifest = json.loads((ROOT / "manifest.json").read_text())
     self.assertEqual(manifest["entryPoints"], {"service": "Service.qml", "barWidget": "BarWidget.qml"})
     self.assertFalse((ROOT / "main.qml").exists())
-    self.assertFalse(any((ROOT / "components").rglob("*")))
+    self.assertTrue((ROOT / "Panel.qml").exists())
+    self.assertTrue(any((ROOT / "components").rglob("*.qml")))
 
   def test_no_privacy_product_claims_or_ui_processes(self):
     sources = "\n".join(path.read_text() for path in ROOT.glob("*.qml"))
@@ -883,15 +884,15 @@ class StateTests(unittest.TestCase):
     self.assertTrue(state.commands_loading)
 
   def test_complete_panel_layout_and_action_navigation_contracts(self):
-    bar_source = (ROOT / "BarWidget.qml").read_text()
-    self.assertIn("availableActions", bar_source)
-    self.assertIn("triggerAction", bar_source)
-    self.assertIn("actionSelectedIndex", bar_source)
-    self.assertIn("focusSection", bar_source)
-    self.assertIn("DEVICES", bar_source)
-    self.assertIn("ACTIONS", bar_source)
-    self.assertIn("REMOTE COMMANDS", bar_source)
-    self.assertIn("deviceOverviewStatus", bar_source)
+    ui_source = (ROOT / "Panel.qml").read_text() + "\n" + "\n".join(p.read_text() for p in (ROOT / "components").glob("*.qml"))
+    self.assertIn("availableActions", ui_source)
+    self.assertIn("triggerAction", ui_source)
+    self.assertIn("actionSelectedIndex", ui_source)
+    self.assertIn("focusSection", ui_source)
+    self.assertIn("DEVICES", ui_source)
+    self.assertIn("ACTIONS", ui_source)
+    self.assertIn("REMOTE COMMANDS", ui_source)
+    self.assertIn("deviceOverviewStatus", ui_source)
 
   def test_available_actions_computation_and_gating(self):
     def available_actions_for(device):

@@ -350,7 +350,7 @@ Item {
         id: scanProcess
         property int targetGeneration: 0
         property int exitCode: -1
-        command: ["bash", "-c", "set -u; base=/modules/kdeconnect; ids=$(gdbus call --session --dest org.kde.kdeconnect --object-path $base --method org.kde.kdeconnect.daemon.devices false false | sed -e 's/.*\\[//' -e 's/\\].*//' -e \"s/'//g\" -e 's/,/\\n/g' -e 's/ //g'); get(){ gdbus call --session --dest org.kde.kdeconnect --object-path \"$base/devices/$1\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device \"$2\" 2>/dev/null | sed -E \"s/^\\(<([^>]*)>.*$/\\1/\"; }; for id in $ids; do [ -n \"$id\" ] || continue; path=\"$base/devices/$id\"; name=$(get \"$id\" name); type=$(get \"$id\" type); paired=$(get \"$id\" isPaired); reachable=$(get \"$id\" isReachable); supported=$(get \"$id\" supportedPlugins | tr -d \"[]' \"); plugins=; for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard; do if printf %s \"$supported\" | grep -qw \"$plugin\"; then plugins=\"${plugins:+$plugins,}$plugin\"; fi; done; charge=-1; charging=false; if printf %s \"$plugins\" | grep -q kdeconnect_battery; then battery=\"$path/battery\"; charge=$(gdbus call --session --dest org.kde.kdeconnect --object-path \"$battery\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery charge 2>/dev/null | sed -E 's/^\\(<([0-9-]+)>.*$/\\1/'); charging=$(gdbus call --session --dest org.kde.kdeconnect --object-path \"$battery\" --method org.freedesktop.DBus.Properties.Get org.kde.kdeconnect.device.battery isCharging 2>/dev/null | grep -q true && echo true || echo false); fi; printf 'DEVICE\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$id\" \"$name\" \"$type\" \"$paired\" \"$reachable\" \"$charge\" \"$charging\" \"$plugins\"; done"]
+        command: ["bash", getScriptPath()]
         stdout: StdioCollector { waitForEnd: true }
         stderr: StdioCollector { waitForEnd: true }
         onExited: function(code) {
@@ -431,7 +431,7 @@ Item {
     }
 
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
-    Timer { interval: 15000; running: true; repeat: true; onTriggered: root.refresh() }
+    Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
     Component.onDestruction: { signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false }
 }
