@@ -12,8 +12,6 @@ if command -v omarchy-plugin-validate >/dev/null 2>&1; then
     validator="$(command -v omarchy-plugin-validate)"
 elif [ -n "${OMARCHY_PATH:-}" ] && [ -x "${OMARCHY_PATH}/bin/omarchy-plugin-validate" ]; then
     validator="${OMARCHY_PATH}/bin/omarchy-plugin-validate"
-elif [ -x "/home/sastauser/code/temp/omarchy/bin/omarchy-plugin-validate" ]; then
-    validator="/home/sastauser/code/temp/omarchy/bin/omarchy-plugin-validate"
 fi
 
 if [ -n "$validator" ] && [ -x "$validator" ]; then
@@ -26,7 +24,7 @@ if command -v qmllint >/dev/null 2>&1; then
     qml_output="$(mktemp)"
     trap 'rm -f "$qml_output"' EXIT
     set +e
-    omarchy_shell="${OMARCHY_PATH:-/home/sastauser/code/temp/omarchy}/shell"
+    omarchy_shell="${OMARCHY_PATH:-}/shell"
     
     qml_files=(Service.qml BarWidget.qml KdeConnectController.qml)
     if [ -f Panel.qml ]; then qml_files+=(Panel.qml); fi
