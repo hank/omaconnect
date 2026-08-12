@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "omaconnect",
   "name": "OmaConnect",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Jitendra Dara (jitendradara12)",
-  "description": "Integrates KDE Connect device state, battery status, and device actions into Omarchy.",
+  "description": "Seamless KDE Connect integration for Omarchy -- SMS messaging, battery & cellular stats, clipboard sync, file sharing, and remote device commands.",
   "license": "MIT",
   "homepage": "https://github.com/jitendradara12/omaconnect",
   "repository": "https://github.com/jitendradara12/omaconnect",
@@ -18,7 +18,7 @@
   },
   "barWidget": {
     "displayName": "OmaConnect",
-    "description": "KDE Connect device state and safe actions",
+    "description": "KDE Connect device state, SMS, battery, and remote actions",
     "category": "Productivity",
     "allowMultiple": false,
     "defaultSection": "right"

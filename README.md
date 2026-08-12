@@ -1,6 +1,6 @@
 # OmaConnect
 
-OmaConnect integrates KDE Connect device status, battery monitoring, and remote actions into the Omarchy bar.
+OmaConnect integrates KDE Connect device status, SMS messaging, battery/cellular monitoring, and remote actions seamlessly into the Omarchy bar.
 
 ![OmaConnect screenshot](preview.png)
 
@@ -12,11 +12,14 @@ omarchy plugin add https://github.com/jitendradara12/omaconnect.git --enable --y
 
 ## Features
 
-- **Device Monitoring**: Real-time battery percentage, charging state, reachability, and pairing status.
-- **Quick Actions**: Ring device, sync clipboard, send files via native file picker, send ping messages, and share text or links.
-- **Remote Commands**: Execute custom commands configured on target devices.
-- **Pairing Management**: Inline pair and unpair requests with two-step confirmation.
-- **Keyboard Navigation**: Full vim-style navigation (`h`/`j`/`k`/`l`), keybindings, and shortcuts.
+- **Device & Network Monitoring**: Real-time battery level, charging indicators, LTE/5G cellular status, reachability, and pairing state.
+- **SMS & Messaging**: Direct `kdeconnect-sms` integration and inline ping/text composer.
+- **Native Omarchy File Picker**: Send files to paired devices instantly via lightweight `omarchy-menu-file`.
+- **Quick Device Actions**: Ring device, sync clipboard, send files, ping, and share text or URLs.
+- **Remote Commands**: Discover and execute custom remote commands configured on target devices.
+- **Pairing Management**: Inline pair and unpair requests with safety confirmation steps.
+- **Vim & Keyboard Controls**: Full keyboard navigation (`h`/`j`/`k`/`l`), shortcuts, and IPC integration.
+- **Performance Optimized**: Low-overhead QML process collector and memoized action bindings.
 
 ## Shortcuts
 
