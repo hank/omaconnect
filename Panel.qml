@@ -41,7 +41,7 @@ KeyboardPanel {
     function toggle() { opened = !opened }
     function closeForPopoutSwitch() { opened = false }
 
-    function availableActions() {
+    readonly property var availableActions: {
         if (!root.device || !root.device.paired || !root.device.reachable) return []
         var caps = root.device.capabilities || {}
         var res = []
@@ -194,7 +194,7 @@ KeyboardPanel {
             }
         } else if (focusSection === "refresh") { if (service) service.refresh(true) }
         else if (focusSection === "actions") {
-            var acts = availableActions()
+            var acts = availableActions
             if (acts.length > 0) {
                 var actIdx = Math.max(0, Math.min(acts.length - 1, actionSelectedIndex))
                 triggerAction(acts[actIdx])
@@ -234,7 +234,7 @@ KeyboardPanel {
             if (dy) {
                 if (root.focusSection === "commands" && root.commandsExpanded) root.selectCommand(dy)
                 else if (root.focusSection === "actions") {
-                    var acts = root.availableActions()
+                    var acts = root.availableActions
                     if (acts.length > 0) {
                         if (dy > 0 && root.actionSelectedIndex < acts.length - 1) root.actionSelectedIndex++
                         else if (dy < 0 && root.actionSelectedIndex > 0) root.actionSelectedIndex--
@@ -252,7 +252,7 @@ KeyboardPanel {
             else if (key === "j" || key === "down") {
                 if (root.focusSection === "commands" && root.commandsExpanded) root.selectCommand(1)
                 else if (root.focusSection === "actions") {
-                    var actsD = root.availableActions()
+                    var actsD = root.availableActions
                     if (actsD.length > 0 && root.actionSelectedIndex < actsD.length - 1) root.actionSelectedIndex++
                     else if (root.device && root.device.capabilities && root.device.capabilities.commands) root.focusSection = "commands"
                     else root.focusSection = "devices"
@@ -269,7 +269,7 @@ KeyboardPanel {
             }
             else if (key === "l" || key === "right") {
                 if (root.focusSection === "devices") {
-                    var availableL0 = root.availableActions()
+                    var availableL0 = root.availableActions
                     if (availableL0.length > 0) {
                         root.focusSection = "actions"
                         root.actionSelectedIndex = 0
@@ -278,7 +278,7 @@ KeyboardPanel {
                     }
                 }
                 else if (root.focusSection === "actions") {
-                    var availableL = root.availableActions()
+                    var availableL = root.availableActions
                     if (root.actionSelectedIndex < availableL.length - 1) {
                         root.actionSelectedIndex++
                     } else if (root.device && root.device.capabilities && root.device.capabilities.commands) {
@@ -291,7 +291,7 @@ KeyboardPanel {
             }
             else if (key === "h" || key === "left") {
                 if (root.focusSection === "commands") {
-                    var availableCmdH = root.availableActions()
+                    var availableCmdH = root.availableActions
                     if (availableCmdH.length > 0) {
                         root.focusSection = "actions"
                         root.actionSelectedIndex = availableCmdH.length - 1
@@ -309,7 +309,7 @@ KeyboardPanel {
                 else if (root.focusSection === "devices") {
                     if (root.device && root.device.capabilities && root.device.capabilities.commands) root.focusSection = "commands"
                     else {
-                        var availableDevH = root.availableActions()
+                        var availableDevH = root.availableActions
                         if (availableDevH.length > 0) {
                             root.focusSection = "actions"
                             root.actionSelectedIndex = availableDevH.length - 1

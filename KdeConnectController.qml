@@ -211,8 +211,6 @@ Item {
         return startAction(id, ["bash", getSmsScriptPath(), String(id)], "SMS app opened", "SMS app")
     }
 
-
-
     function applyScan(output, targetGeneration) {
         if (targetGeneration !== generation) return
         var next = []
@@ -336,7 +334,6 @@ Item {
         commandTargetId = String(id)
         commandsProcess.targetGeneration = generation
         commandsProcess.targetDeviceId = String(id)
-        commandsProcess.output = ""
         commandsProcess.command = ["kdeconnect-cli", "-d", String(id), "--list-commands"]
         commandsProcess.running = true
         return true
@@ -432,15 +429,14 @@ Item {
 
     Process {
         id: commandsProcess
-        property string output: ""
         property string targetDeviceId: ""
         property int targetGeneration: 0
-        stdout: SplitParser { onRead: function(line) { commandsProcess.output += line + "\n" } }
+        stdout: StdioCollector { waitForEnd: true }
         stderr: StdioCollector { waitForEnd: true }
         onExited: function(code) {
             root.commandsLoading = false
             if (targetGeneration !== root.generation || targetDeviceId !== root.selectedDeviceId) return
-            root.remoteCommands = code === 0 ? root.parseRemoteCommands(output) : []
+            root.remoteCommands = code === 0 ? root.parseRemoteCommands(stdout.text) : []
         }
     }
 

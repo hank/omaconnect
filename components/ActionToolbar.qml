@@ -29,7 +29,7 @@ Column {
         width: parent.width
         spacing: Style.space(6)
         Repeater {
-            model: panel ? panel.availableActions() : []
+            model: panel ? panel.availableActions : []
             delegate: CursorSurface {
                 required property string modelData
                 required property int index
