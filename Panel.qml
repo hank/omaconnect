@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -58,7 +57,7 @@ KeyboardPanel {
         if (!service || !device) return
         if (actionId === "ring") service.ringDevice(device.id)
         else if (actionId === "clipboard") service.sendClipboard(device.id)
-        else if (actionId === "file") { if (service.startFileSelection(device.id)) fileDialog.open() }
+        else if (actionId === "file") service.startFileSelection(device.id)
         else if (actionId === "ping") {
             if (activeComposer === "ping") closeComposer()
             else openComposer("ping")
@@ -198,7 +197,7 @@ KeyboardPanel {
             }
         } else if (focusSection === "ring" && service && device) service.ringDevice(device.id)
         else if (focusSection === "clipboard" && service && device) service.sendClipboard(device.id)
-        else if (focusSection === "file" && service && device) { if (service.startFileSelection(device.id)) fileDialog.open() }
+        else if (focusSection === "file" && service && device) service.startFileSelection(device.id)
         else if (focusSection === "ping") {
             if (activeComposer === "ping") submitPing()
             else openComposer("ping")
@@ -225,17 +224,6 @@ KeyboardPanel {
         id: keyCatcher
         anchors.fill: parent
 
-        FileDialog {
-            id: fileDialog
-            title: "Select file to send"
-            currentFolder: "file://" + Quickshell.env("HOME")
-            onAccepted: {
-                if (root.service && root.device) root.service.sendFile(root.device.id, selectedFile)
-            }
-            onRejected: {
-                if (root.service) root.service.cancelFileSelection()
-            }
-        }
         blocked: !!(composerSection && ((composerSection.pingInput && composerSection.pingInput.activeFocus) || (composerSection.textInput && composerSection.textInput.activeFocus)))
         onMoveRequested: function(dx, dy) {
             if (!root.cursorActive) { root.cursorActive = true; return }

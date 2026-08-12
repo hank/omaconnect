@@ -80,6 +80,11 @@ Item {
         return resolved
     }
 
+    function getPickerScriptPath() {
+        var resolved = Qt.resolvedUrl("scripts/pick_file.sh").toString().replace(/^file:\/\//, "")
+        return resolved
+    }
+
     function refresh(forceNetwork) {
         if (scanProcess.running) return
         var nextGeneration = generation + 1
@@ -228,14 +233,18 @@ Item {
     function startFileSelection(id) {
         var device = deviceById(id)
         if (!device || !device.capabilities.file || !canAct(id)) return false
+        if (filePickerProcess.running) filePickerProcess.running = false
         fileBusy = true
         actionState = "busy"
         actionMessage = "Selecting file"
         actionError = ""
+        filePickerProcess.targetDeviceId = String(id)
+        filePickerProcess.running = true
         return true
     }
 
     function cancelFileSelection() {
+        if (filePickerProcess.running) filePickerProcess.running = false
         fileBusy = false
         actionState = "cancelled"
         actionMessage = "File selection cancelled"
@@ -430,8 +439,24 @@ Item {
         }
     }
 
+    Process {
+        id: filePickerProcess
+        property string targetDeviceId: ""
+        command: ["bash", getPickerScriptPath()]
+        stdout: StdioCollector { waitForEnd: true }
+        onExited: function(code) {
+            filePickerProcess.running = false
+            var selectedPath = stdout.text.trim()
+            if (code === 0 && selectedPath) {
+                root.sendFile(targetDeviceId, selectedPath)
+            } else {
+                root.cancelFileSelection()
+            }
+        }
+    }
+
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
     Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
-    Component.onDestruction: { signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false }
+    Component.onDestruction: { signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false }
 }

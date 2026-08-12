@@ -709,6 +709,16 @@ class StateTests(unittest.TestCase):
   def test_shell_script_is_not_needed_for_file_sharing(self):
     self.assertFalse((ROOT / "scripts" / "share_file.sh").exists())
 
+  def test_no_file_dialog_and_process_file_picker_contract(self):
+    sources = "\n".join(path.read_text() for path in ROOT.glob("*.qml"))
+    self.assertNotIn("QtQuick.Dialogs", sources)
+    self.assertNotIn("FileDialog {", sources)
+    controller_source = (ROOT / "KdeConnectController.qml").read_text()
+    self.assertIn("filePickerProcess", controller_source)
+    self.assertIn("getPickerScriptPath", controller_source)
+    picker_py = (ROOT / "scripts" / "pick_file.py").read_text()
+    self.assertIn("omarchy-menu-file", picker_py)
+
   def test_remote_commands_unsupported_device(self):
     line = "DEVICE\tdev-unsupp\tPhone\tphone\ttrue\ttrue\t80\tfalse\tkdeconnect_ping,kdeconnect_share"
     dev = parse_device(line)
