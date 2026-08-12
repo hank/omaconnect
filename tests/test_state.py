@@ -716,8 +716,8 @@ class StateTests(unittest.TestCase):
     controller_source = (ROOT / "KdeConnectController.qml").read_text()
     self.assertIn("filePickerProcess", controller_source)
     self.assertIn("getPickerScriptPath", controller_source)
-    picker_py = (ROOT / "scripts" / "pick_file.py").read_text()
-    self.assertIn("omarchy-menu-file", picker_py)
+    picker_sh = (ROOT / "scripts" / "pick_file.sh").read_text()
+    self.assertIn("omarchy-menu-file", picker_sh)
 
   def test_remote_commands_unsupported_device(self):
     line = "DEVICE\tdev-unsupp\tPhone\tphone\ttrue\ttrue\t80\tfalse\tkdeconnect_ping,kdeconnect_share"
