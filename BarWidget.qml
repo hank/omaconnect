@@ -54,7 +54,7 @@ BarWidget {
         id: buttonItem
         anchors.fill: parent
         bar: root.bar
-        text: "󰄀"
+        text: "󰄜"
         tooltipText: root.deviceName
 
         onPressed: function(b) {
