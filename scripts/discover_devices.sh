@@ -9,16 +9,34 @@ for command in gdbus sed grep tr; do
     command -v "$command" >/dev/null 2>&1 || exit 127
 done
 
-gdbus call --session --dest org.freedesktop.DBus \
-    --object-path /org/freedesktop/DBus \
-    --method org.freedesktop.DBus.NameHasOwner org.kde.kdeconnect \
-    | grep -q '(true,)' || exit 69
+is_daemon_running() {
+    gdbus call --session --dest org.freedesktop.DBus \
+        --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.NameHasOwner org.kde.kdeconnect 2>/dev/null \
+        | grep -q '(true,)'
+}
+
+ensure_daemon() {
+    if ! is_daemon_running; then
+        gdbus call --session --dest org.freedesktop.DBus \
+            --object-path /org/freedesktop/DBus \
+            --method org.freedesktop.DBus.StartServiceByName org.kde.kdeconnect 0 >/dev/null 2>&1 || true
+        sleep 0.5
+    fi
+}
 
 if [[ "${1:-}" == "--refresh" || "${1:-}" == "-r" ]]; then
+    ensure_daemon
+    if command -v kdeconnect-cli >/dev/null 2>&1; then
+        kdeconnect-cli --refresh >/dev/null 2>&1 || true
+    fi
     gdbus call --session --dest org.kde.kdeconnect \
         --object-path /modules/kdeconnect \
         --method org.kde.kdeconnect.daemon.forceOnNetworkChange >/dev/null 2>&1 || true
+    sleep 1.2
 fi
+
+is_daemon_running || exit 69
 
 property() {
     local path=$1 interface=$2 name=$3

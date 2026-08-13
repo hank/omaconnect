@@ -104,7 +104,10 @@ Item {
     }
 
     function refresh(forceNetwork) {
-        if (scanProcess.running) return
+        if (scanProcess.running) {
+            if (!forceNetwork) return
+            scanProcess.running = false
+        }
         var nextGeneration = generation + 1
         generation = nextGeneration
         scanning = true
@@ -225,6 +228,7 @@ Item {
     }
 
     function applyScan(output, targetGeneration) {
+        scanning = false
         if (targetGeneration !== generation) return
         var next = []
         String(output || "").split("\n").forEach(function(line) {
@@ -236,7 +240,6 @@ Item {
             if (next.length) selectDevice(next[0].id)
             else clearActionState()
         }
-        scanning = false
         daemonAvailable = scanProcess.exitCode === 0
         sessionBusAvailable = daemonAvailable
         discoveryState = daemonAvailable ? "ready" : "unavailable"
