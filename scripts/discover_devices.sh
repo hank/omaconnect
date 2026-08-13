@@ -21,11 +21,17 @@ if [[ "${1:-}" == "--refresh" || "${1:-}" == "-r" ]]; then
 fi
 
 property() {
-    local path=$1 interface=$2 name=$3 reply
-    reply=$(gdbus call --session --dest org.kde.kdeconnect \
+    local path=$1 interface=$2 name=$3
+    gdbus call --session --dest org.kde.kdeconnect \
         --object-path "$path" --method org.freedesktop.DBus.Properties.Get \
-        "$interface" "$name" 2>/dev/null) || reply=""
-    printf '%s\n' "$reply"
+        "$interface" "$name" 2>/dev/null || return 69
+}
+
+sanitize_field() {
+    local field=$1
+    field=${field//$'\t'/ }
+    field=${field//$'\n'/ }
+    printf '%s' "$field"
 }
 
 value() {
@@ -75,6 +81,5 @@ while IFS= read -r entry; do
         [[ "$strength_raw" =~ ^[0-9]+$ ]] && net_strength=$strength_raw
     fi
     printf 'DEVICE\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$id" "$name" "$type" "$paired" "$reachable" "$charge" "$charging" "$plugins" "$net_type" "$net_strength"
+        "$(sanitize_field "$id")" "$(sanitize_field "$name")" "$(sanitize_field "$type")" "$paired" "$reachable" "$charge" "$charging" "$plugins" "$(sanitize_field "$net_type")" "$net_strength"
 done <<< "$entries"
-

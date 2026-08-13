@@ -5,7 +5,7 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
 python3 -m unittest -q tests/test_state.py
-bash -n scripts/validate.sh
+bash -n scripts/*.sh
 
 validator=""
 if command -v omarchy-plugin-validate >/dev/null 2>&1; then

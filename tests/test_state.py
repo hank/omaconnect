@@ -747,6 +747,31 @@ class StateTests(unittest.TestCase):
     service_source = (ROOT / "Service.qml").read_text()
     self.assertIn("openSmsApp", service_source)
     self.assertIn("controller.openSmsApp", service_source)
+    self.assertIn("setPendingPairing", service_source)
+    self.assertIn("deviceNetworkIcon", service_source)
+
+  def test_confirming_unpair_cannot_follow_a_device_switch(self):
+    panel_source = (ROOT / "Panel.qml").read_text()
+    self.assertIn("function selectDevice(id)", panel_source)
+    self.assertIn("cancelUnpairConfirm(unpairConfirmingId)", panel_source)
+    self.assertIn("var targetIdY = root.service.selectedDeviceId", panel_source)
+
+  def test_scan_and_picker_lifecycle_guards(self):
+    controller_source = (ROOT / "KdeConnectController.qml").read_text()
+    self.assertIn("function clearActionState()", controller_source)
+    self.assertIn("if (filePickerProcess.running) return false", controller_source)
+    self.assertNotIn("filePickerProcess.running = false\n            var selectedPath", controller_source)
+
+  def test_discovery_property_failures_and_fields_are_sanitized(self):
+    discovery_source = (ROOT / "scripts" / "discover_devices.sh").read_text()
+    self.assertIn("|| return 69", discovery_source)
+    self.assertIn("sanitize_field()", discovery_source)
+    self.assertIn("field=${field//$'\\t'/ }", discovery_source)
+
+  def test_sms_launcher_reports_missing_command(self):
+    sms_source = (ROOT / "scripts" / "open_sms.sh").read_text()
+    self.assertIn("command -v kdeconnect-sms", sms_source)
+    self.assertIn("exit 127", sms_source)
 
 
   def test_no_privacy_product_claims_or_ui_processes(self):
@@ -1051,4 +1076,3 @@ class StateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

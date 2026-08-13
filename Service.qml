@@ -29,6 +29,7 @@ Item {
 
     function refresh(forceNetwork) { controller.refresh(forceNetwork) }
     function selectDevice(id) { controller.selectDevice(id) }
+    function setPendingPairing(id, state) { controller.setPendingPairing(id, state) }
     function pingDevice(id, text) { return controller.pingDevice(id, text) }
     function shareText(id, text) { return controller.shareText(id, text) }
     function fetchRemoteCommands(id) { return controller.fetchRemoteCommands(id) }
@@ -44,5 +45,5 @@ Item {
     function deviceOverviewStatus(device) { return controller.deviceOverviewStatus(device) }
     function deviceBatteryText(device) { return controller.deviceBatteryText(device) }
     function deviceBatteryIcon(device) { return controller.deviceBatteryIcon(device) }
+    function deviceNetworkIcon(device) { return controller.deviceNetworkIcon(device) }
 }
-

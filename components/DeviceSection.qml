@@ -79,8 +79,8 @@ Column {
                     spacing: Style.space(6)
 
                     Text {
-                        text: root.service ? root.service.deviceBatteryIcon(root.device) : ""
-                        color: (root.device && root.device.battery >= 0 && root.device.battery <= 20 && !(root.device.isCharging || root.device.charging))
+                        text: root.service ? ((root.device.capabilities && root.device.capabilities.battery) ? root.service.deviceBatteryIcon(root.device) : root.service.deviceNetworkIcon(root.device)) : ""
+                        color: (root.device && root.device.capabilities && root.device.capabilities.battery && root.device.battery >= 0 && root.device.battery <= 20 && !(root.device.isCharging || root.device.charging))
                             ? Color.urgent
                             : ((root.device && (root.device.isCharging || root.device.charging)) ? Color.accent : root.foreground)
                         font.family: root.fontFamily
@@ -137,9 +137,9 @@ Column {
                 onEntered: {
                     panel.cursorActive = true
                     panel.selectedIndex = index
-                    if (root.service) root.service.selectDevice(modelData.id)
+                    panel.selectDevice(modelData.id)
                 }
-                onClicked: if (root.service) root.service.selectDevice(modelData.id)
+                onClicked: panel.selectDevice(modelData.id)
             }
             Item {
                 id: row

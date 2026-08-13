@@ -44,7 +44,7 @@ o.bind("SUPER + Shift + C", "Toggle OmaConnect", "omarchy-shell shell toggle oma
 
 ## Dependencies
 
-Requires `kdeconnect`, `glib2`, and `dbus`:
+Requires `kdeconnect`, `glib2`, `dbus`, and Omarchy's `omarchy-menu-file` command for file sharing:
 
 ```bash
 sudo pacman -S kdeconnect glib2 dbus
@@ -61,4 +61,3 @@ omarchy plugin update omaconnect
 ```bash
 omarchy plugin remove omaconnect
 ```
-

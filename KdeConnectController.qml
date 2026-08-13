@@ -53,6 +53,13 @@ Item {
         if (commandsProcess.running) commandsProcess.running = false
     }
 
+    function clearActionState() {
+        actionState = "idle"
+        actionMessage = ""
+        actionError = ""
+        fileBusy = false
+    }
+
     function safeError(exitCode, operation) {
         if (exitCode === 127 || exitCode === 69) return operation + " unavailable"
         if (exitCode === 2) return operation + " rejected"
@@ -75,19 +82,25 @@ Item {
         return !!(device && device.paired && device.reachable)
     }
 
+    function scriptPath(relativePath) {
+        var resolved = Qt.resolvedUrl(relativePath).toString().replace(/^file:\/\//, "")
+        try {
+            return decodeURIComponent(resolved)
+        } catch (error) {
+            return resolved
+        }
+    }
+
     function getScriptPath() {
-        var resolved = Qt.resolvedUrl("scripts/discover_devices.sh").toString().replace(/^file:\/\//, "")
-        return resolved
+        return scriptPath("scripts/discover_devices.sh")
     }
 
     function getPickerScriptPath() {
-        var resolved = Qt.resolvedUrl("scripts/pick_file.sh").toString().replace(/^file:\/\//, "")
-        return resolved
+        return scriptPath("scripts/pick_file.sh")
     }
 
     function getSmsScriptPath() {
-        var resolved = Qt.resolvedUrl("scripts/open_sms.sh").toString().replace(/^file:\/\//, "")
-        return resolved
+        return scriptPath("scripts/open_sms.sh")
     }
 
     function refresh(forceNetwork) {
@@ -219,8 +232,10 @@ Item {
             if (device) next.push(device)
         })
         devices = next
-        if (!deviceById(selectedDeviceId))
-            selectedDeviceId = next.length ? next[0].id : ""
+        if (!deviceById(selectedDeviceId)) {
+            if (next.length) selectDevice(next[0].id)
+            else clearActionState()
+        }
         scanning = false
         daemonAvailable = scanProcess.exitCode === 0
         sessionBusAvailable = daemonAvailable
@@ -293,7 +308,7 @@ Item {
     function startFileSelection(id) {
         var device = deviceById(id)
         if (!device || !device.capabilities.file || !canAct(id)) return false
-        if (filePickerProcess.running) filePickerProcess.running = false
+        if (filePickerProcess.running) return false
         fileBusy = true
         actionState = "busy"
         actionMessage = "Selecting file"
@@ -505,7 +520,6 @@ Item {
         command: ["bash", getPickerScriptPath()]
         stdout: StdioCollector { waitForEnd: true }
         onExited: function(code) {
-            filePickerProcess.running = false
             var selectedPath = stdout.text.trim()
             if (code === 0 && selectedPath) {
                 root.sendFile(targetDeviceId, selectedPath)

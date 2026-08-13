@@ -82,6 +82,12 @@ KeyboardPanel {
         if (service && id && typeof service.setPendingPairing === "function") service.setPendingPairing(id, "")
     }
 
+    function selectDevice(id) {
+        if (!service) return
+        if (unpairConfirmingId && unpairConfirmingId !== id) cancelUnpairConfirm(unpairConfirmingId)
+        service.selectDevice(id)
+    }
+
     function confirmUnpair(id) {
         unpairConfirmingId = ""
         if (service) service.unpairDevice(id)
@@ -161,7 +167,7 @@ KeyboardPanel {
         var list = service ? service.devices : []
         if (!list.length) return
         selectedIndex = Math.max(0, Math.min(list.length - 1, selectedIndex + delta))
-        if (cursorActive && service) service.selectDevice(list[selectedIndex].id)
+        if (cursorActive) selectDevice(list[selectedIndex].id)
     }
 
     function toggleCommandsExpanded() {
@@ -182,7 +188,7 @@ KeyboardPanel {
             var list = service ? service.devices : []
             var dev = list[selectedIndex]
             if (dev && service) {
-                service.selectDevice(dev.id)
+                selectDevice(dev.id)
                 var pending = (service.pendingPairing && service.pendingPairing[dev.id]) ? service.pendingPairing[dev.id] : ""
                 if (root.unpairConfirmingId === dev.id || pending === "unpair_confirm") {
                     root.confirmUnpair(dev.id)
@@ -333,12 +339,12 @@ KeyboardPanel {
                     if (pendU !== "removing") root.requestUnpairConfirm(devU.id)
                 }
             }
-            else if (key === "y" && (root.unpairConfirmingId !== "" || (root.service && root.service.selectedDeviceId && root.service.pendingPairing && root.service.pendingPairing[root.service.selectedDeviceId] === "unpair_confirm"))) {
-                var targetIdY = root.unpairConfirmingId || (root.service ? root.service.selectedDeviceId : "")
+            else if (key === "y" && root.service && root.service.selectedDeviceId && (root.unpairConfirmingId === root.service.selectedDeviceId || (root.service.pendingPairing && root.service.pendingPairing[root.service.selectedDeviceId] === "unpair_confirm"))) {
+                var targetIdY = root.service.selectedDeviceId
                 if (targetIdY) root.confirmUnpair(targetIdY)
             }
-            else if ((key === "c" || key === "escape") && (root.unpairConfirmingId !== "" || (root.service && root.service.selectedDeviceId && root.service.pendingPairing && root.service.pendingPairing[root.service.selectedDeviceId] === "unpair_confirm"))) {
-                var targetIdC = root.unpairConfirmingId || (root.service ? root.service.selectedDeviceId : "")
+            else if ((key === "c" || key === "escape") && root.service && root.service.selectedDeviceId && (root.unpairConfirmingId === root.service.selectedDeviceId || (root.service.pendingPairing && root.service.pendingPairing[root.service.selectedDeviceId] === "unpair_confirm"))) {
+                var targetIdC = root.service.selectedDeviceId
                 if (targetIdC) root.cancelUnpairConfirm(targetIdC)
             }
         }
