@@ -747,6 +747,8 @@ class StateTests(unittest.TestCase):
     service_source = (ROOT / "Service.qml").read_text()
     self.assertIn("openSmsApp", service_source)
     self.assertIn("controller.openSmsApp", service_source)
+    self.assertIn("configureFirewall", service_source)
+    self.assertIn("controller.configureFirewall", service_source)
     self.assertIn("setPendingPairing", service_source)
     self.assertIn("deviceNetworkIcon", service_source)
 

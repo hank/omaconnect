@@ -103,6 +103,17 @@ Item {
         return scriptPath("scripts/open_sms.sh")
     }
 
+    function getFirewallScriptPath() {
+        return scriptPath("scripts/setup_firewall.sh")
+    }
+
+    function configureFirewall() {
+        if (firewallProcess.running) return
+        var script = getFirewallScriptPath()
+        firewallProcess.command = ["bash", "-c", "if command -v omarchy-launch-floating-terminal-with-presentation >/dev/null 2>&1; then omarchy-launch-floating-terminal-with-presentation \"bash '" + script + "'\"; else xdg-terminal-exec bash '" + script + "'; fi"]
+        firewallProcess.running = true
+    }
+
     function refresh(forceNetwork) {
         if (scanProcess.running) {
             if (!forceNetwork) return
@@ -532,8 +543,15 @@ Item {
         }
     }
 
+    Process {
+        id: firewallProcess
+        onExited: function(code) {
+            root.refresh(true)
+        }
+    }
+
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
     Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
-    Component.onDestruction: { dbusDebounceTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false }
+    Component.onDestruction: { dbusDebounceTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false }
 }

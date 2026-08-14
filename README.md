@@ -50,6 +50,18 @@ Requires `kdeconnect`, `glib2`, `dbus`, and Omarchy's `omarchy-menu-file` comman
 sudo pacman -S kdeconnect glib2 dbus
 ```
 
+### Firewall (UFW)
+
+Omarchy blocks incoming ports by default. Allow KDE Connect discovery and transfer ports:
+
+```bash
+sudo ufw allow 1714:1764/tcp comment 'KDE Connect'
+sudo ufw allow 1714:1764/udp comment 'KDE Connect'
+sudo ufw reload
+```
+
+*(You can also click **"Allow in Firewall"** directly inside the OmaConnect panel if no devices appear.)*
+
 ## Update
 
 ```bash

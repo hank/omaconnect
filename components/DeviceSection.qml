@@ -241,11 +241,36 @@ Column {
         }
     }
 
-    Text {
+    Column {
         visible: !root.service || root.service.devices.length === 0
-        text: root.service && root.service.scanning ? "Scanning..." : "No devices found"
-        color: Qt.darker(root.foreground, 1.4)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.bodySmall
+        spacing: Style.space(6)
+        width: parent.width
+
+        Text {
+            text: root.service && root.service.scanning ? "Scanning..." : "No devices found"
+            color: Qt.darker(root.foreground, 1.4)
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+        }
+
+        Row {
+            visible: !(root.service && root.service.scanning)
+            spacing: Style.space(6)
+
+            Text {
+                text: "Firewall blocking?"
+                color: Qt.darker(root.foreground, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Button {
+                text: "Allow in Firewall"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: if (root.service) root.service.configureFirewall()
+            }
+        }
     }
 }
