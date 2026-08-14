@@ -24,8 +24,12 @@ BarWidget {
         if ("settings" in target) target.settings = root.settings
     }
 
-    function togglePanel() {
+    function toggle() {
         if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()
+    }
+
+    function togglePanel() {
+        toggle()
     }
 
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
