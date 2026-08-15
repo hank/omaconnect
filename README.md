@@ -31,16 +31,16 @@ o.bind("SUPER + SHIFT + C", "Toggle OmaConnect", "omarchy-shell shell toggle oma
 
 ### Panel Bindings
 
-| Key | Action |
-| :--- | :--- |
+| Key                        | Action                                                     |
+| :------------------------- | :--------------------------------------------------------- |
 | `h`, `l` / `Left`, `Right` | Switch focus between Devices, Actions, and Remote Commands |
-| `j`, `k` / `Down`, `Up` | Navigate items within active section |
-| `Enter`, `Space` | Activate focused item or submit active composer |
-| `p` | Pair selected device |
-| `u` | Request unpair confirmation for selected device |
-| `y` / `c` (`Esc`) | Confirm (`y`) or cancel (`c`/`Esc`) unpair prompt |
-| `r` | Refresh device status |
-| `Esc` | Close active composer or hide panel |
+| `j`, `k` / `Down`, `Up`    | Navigate items within active section                       |
+| `Enter`, `Space`           | Activate focused item or submit active composer            |
+| `p`                        | Pair selected device                                       |
+| `u`                        | Request unpair confirmation for selected device            |
+| `y` / `c` (`Esc`)          | Confirm (`y`) or cancel (`c`/`Esc`) unpair prompt          |
+| `r`                        | Refresh device status                                      |
+| `Esc`                      | Close active composer or hide panel                        |
 
 ## Dependencies
 
@@ -54,13 +54,14 @@ sudo pacman -S kdeconnect glib2 dbus
 
 Omarchy blocks incoming ports by default. Allow KDE Connect discovery and transfer ports:
 
+![OmaConnect screenshot of allow in firewall](preview1.png)
+_(You can just click **"Allow in Firewall"** directly inside the OmaConnect panel if no devices appear.)_
+
 ```bash
 sudo ufw allow 1714:1764/tcp comment 'KDE Connect'
 sudo ufw allow 1714:1764/udp comment 'KDE Connect'
 sudo ufw reload
 ```
-
-*(You can also click **"Allow in Firewall"** directly inside the OmaConnect panel if no devices appear.)*
 
 ## Update
 
