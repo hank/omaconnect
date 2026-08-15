@@ -55,7 +55,8 @@ sudo pacman -S kdeconnect glib2 dbus
 Omarchy blocks incoming ports by default. Allow KDE Connect discovery and transfer ports:
 
 ![OmaConnect screenshot of allow in firewall](preview1.png)
-_(You can just click **"Allow in Firewall"** directly inside the OmaConnect panel if no devices appear.)_
+
+_You can just click **"Allow in Firewall"** directly inside the OmaConnect panel if no devices appear. Or you can do it manually..._
 
 ```bash
 sudo ufw allow 1714:1764/tcp comment 'KDE Connect'
