@@ -133,13 +133,12 @@ Column {
             currentFill: Style.selectedFillFor(root.foreground, Color.accent)
             MouseArea {
                 anchors.fill: parent
-                hoverEnabled: true
-                onEntered: {
+                onClicked: {
                     panel.cursorActive = true
+                    panel.focusSection = "devices"
                     panel.selectedIndex = index
                     panel.selectDevice(modelData.id)
                 }
-                onClicked: panel.selectDevice(modelData.id)
             }
             Item {
                 id: row
@@ -212,7 +211,10 @@ Column {
                             text: "Pair"
                             foreground: root.foreground
                             fontFamily: root.fontFamily
-                            onClicked: if (root.service) root.service.pairDevice(modelData.id)
+                            onClicked: {
+                                panel.selectDevice(modelData.id)
+                                if (root.service) root.service.pairDevice(modelData.id)
+                            }
                         }
 
                         Button {
@@ -220,7 +222,10 @@ Column {
                             text: "Unpair"
                             foreground: root.foreground
                             fontFamily: root.fontFamily
-                            onClicked: panel.requestUnpairConfirm(modelData.id)
+                            onClicked: {
+                                panel.selectDevice(modelData.id)
+                                panel.requestUnpairConfirm(modelData.id)
+                            }
                         }
                     }
                 }

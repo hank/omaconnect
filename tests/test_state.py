@@ -1076,5 +1076,19 @@ class StateTests(unittest.TestCase):
     self.assertIn('dbusDebounceTimer', controller_source)
 
 
+  def test_device_section_selects_on_click_not_hover(self):
+    device_section_source = (ROOT / "components" / "DeviceSection.qml").read_text()
+    self.assertNotIn("onEntered", device_section_source)
+    self.assertNotIn("hoverEnabled", device_section_source)
+    self.assertIn("panel.selectDevice(modelData.id)", device_section_source)
+    self.assertIn("panel.cursorActive = true", device_section_source)
+    self.assertIn('panel.focusSection = "devices"', device_section_source)
+
+  def test_panel_select_device_syncs_selected_index(self):
+    panel_source = (ROOT / "Panel.qml").read_text()
+    self.assertIn("function selectDevice(id)", panel_source)
+    self.assertIn("selectedIndex = i", panel_source)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
