@@ -68,11 +68,11 @@ while IFS= read -r entry; do
     path="$entry"
     [[ "$path" == /* ]] || path="$base/devices/$entry"
     id=${path##*/}
-    name=$(value "$(property "$path" org.kde.kdeconnect.device name)") || exit 69
-    type=$(value "$(property "$path" org.kde.kdeconnect.device type)") || exit 69
-    paired=$(value "$(property "$path" org.kde.kdeconnect.device isPaired)") || exit 69
-    reachable=$(value "$(property "$path" org.kde.kdeconnect.device isReachable)") || exit 69
-    supported=$(property "$path" org.kde.kdeconnect.device supportedPlugins) || exit 69
+    name=$(value "$(property "$path" org.kde.kdeconnect.device name)") || continue
+    type=$(value "$(property "$path" org.kde.kdeconnect.device type)") || continue
+    paired=$(value "$(property "$path" org.kde.kdeconnect.device isPaired)") || continue
+    reachable=$(value "$(property "$path" org.kde.kdeconnect.device isReachable)") || continue
+    supported=$(property "$path" org.kde.kdeconnect.device supportedPlugins) || continue
     plugins=
     for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard kdeconnect_connectivity_report kdeconnect_sms; do
         if [[ "$supported" == *"'$plugin'"* || "$supported" == *"<$plugin>"* ]]; then

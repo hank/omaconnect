@@ -99,7 +99,7 @@ def format_network_status(device):
 
 
 def format_battery_status(device):
-    if not device:
+    if not device or not device.get("reachable", True):
         return ""
     battery_text = ""
     if device.get("capabilities", {}).get("battery"):
@@ -320,6 +320,7 @@ class PairingState:
         self.devices = devices or []
         self.selected_device_id = selected_device_id or (self.devices[0]["id"] if self.devices else "")
         self.pending_pairing = {}
+        self.pairing_request_times = {}
         self.unpair_confirming_id = ""
         self.action_state = "idle"
         self.action_message = ""
@@ -338,6 +339,17 @@ class PairingState:
         self.selected_device_id = device["id"]
         return True
 
+    def refresh(self, force_network=False, current_time=0):
+        if force_network:
+            to_del = []
+            for dev_id, state in self.pending_pairing.items():
+                if state == "requesting":
+                    req_time = self.pairing_request_times.get(dev_id, 0)
+                    if not req_time or (current_time - req_time >= 10000):
+                        to_del.append(dev_id)
+            for dev_id in to_del:
+                del self.pending_pairing[dev_id]
+
     def apply_scan(self, device_lines, target_generation):
         if target_generation != self.generation:
             return False
@@ -347,21 +359,43 @@ class PairingState:
             if dev:
                 next_devices.append(dev)
         self.devices = next_devices
+        for dev in next_devices:
+            if dev.get("paired"):
+                if self.pending_pairing.get(dev["id"]) == "requesting":
+                    del self.pending_pairing[dev["id"]]
+                    if self.selected_device_id == dev["id"] or not self.selected_device_id:
+                        self.action_state = "accepted"
+                        self.action_message = "Device paired"
+                        self.action_error = ""
+                elif dev["id"] in self.pending_pairing:
+                    del self.pending_pairing[dev["id"]]
+            else:
+                if self.pending_pairing.get(dev["id"]) in ("removing", "unpair_confirm"):
+                    del self.pending_pairing[dev["id"]]
         if not any(d["id"] == self.selected_device_id for d in self.devices):
             self.selected_device_id = self.devices[0]["id"] if self.devices else ""
         return True
 
-    def pair_device(self, device_id):
+    def pair_device(self, device_id, timestamp=0):
         dev = next((d for d in self.devices if d["id"] == device_id), None)
         if not dev or not dev.get("capabilities", {}).get("pair"):
             return False
         if self.pending_pairing.get(device_id) in ("requesting", "removing", "unpair_confirm"):
             return False
         self.pending_pairing[device_id] = "requesting"
+        self.pairing_request_times[device_id] = timestamp
         self.action_state = "accepted"
-        self.action_message = "Pairing request accepted"
+        self.action_message = "Pair request sent"
         self.action_error = ""
         return True
+
+    def handle_timeout(self, device_id=None):
+        target = device_id or self.selected_device_id
+        if target in self.pending_pairing and self.pending_pairing[target] == "requesting":
+            del self.pending_pairing[target]
+        self.action_state = "failed"
+        self.action_message = ""
+        self.action_error = "Pairing timed out or rejected"
 
     def request_unpair_confirm(self, device_id):
         dev = next((d for d in self.devices if d["id"] == device_id), None)
@@ -389,21 +423,31 @@ class PairingState:
         if self.unpair_confirming_id == device_id:
             self.unpair_confirming_id = ""
         self.pending_pairing[device_id] = "removing"
+        self.action_state = "accepted"
+        self.action_message = "Device unpaired"
+        self.action_error = ""
         return True
 
     def handle_pair_process_completed(self, target_generation, target_device_id, exit_code, is_pair=True):
         op = "pairing" if is_pair else "unpairing"
-        self.pending_pairing[target_device_id] = "accepted" if exit_code == 0 else "failed"
+        if exit_code == 0:
+            self.pending_pairing[target_device_id] = "requesting" if is_pair else "accepted"
+        else:
+            if is_pair:
+                if target_device_id in self.pending_pairing:
+                    del self.pending_pairing[target_device_id]
+            else:
+                self.pending_pairing[target_device_id] = "failed"
         if target_generation != self.generation or target_device_id != self.selected_device_id:
             return False
         if exit_code == 0:
             self.action_state = "accepted"
-            self.action_message = "Pairing request accepted" if is_pair else "Unpair request accepted"
+            self.action_message = "Pair request sent" if is_pair else "Device unpaired"
             self.action_error = ""
         else:
             self.action_state = "failed"
             self.action_message = ""
-            self.action_error = categorize(exit_code, op)
+            self.action_error = "Pairing timed out or rejected" if is_pair else categorize(exit_code, op)
         return True
 
 
@@ -586,7 +630,7 @@ class StateTests(unittest.TestCase):
         target_device_id="dev-1",
         exit_code=0,
         operation="ping",
-        accepted_msg="Ping request accepted"
+        accepted_msg="Ping sent"
     )
 
     self.assertFalse(accepted)
@@ -604,11 +648,11 @@ class StateTests(unittest.TestCase):
         target_device_id="dev-2",
         exit_code=0,
         operation="text share",
-        accepted_msg="Text-share request accepted"
+        accepted_msg="Text sent"
     )
     self.assertTrue(accepted_valid)
     self.assertEqual(state.action_state, "accepted")
-    self.assertEqual(state.action_message, "Text-share request accepted")
+    self.assertEqual(state.action_message, "Text sent")
 
   def test_composer_process_failure_handling(self):
     state = ComposerState(selected_device_id="dev-1")
@@ -622,7 +666,7 @@ class StateTests(unittest.TestCase):
         target_device_id="dev-1",
         exit_code=127,
         operation="ping",
-        accepted_msg="Ping request accepted"
+        accepted_msg="Ping sent"
     )
     self.assertTrue(completed)
     self.assertEqual(state.action_state, "failed")
@@ -648,12 +692,19 @@ class StateTests(unittest.TestCase):
     self.assertTrue(state.pair_device("dev-1"))
     self.assertEqual(state.pending_pairing["dev-1"], "requesting")
     self.assertEqual(state.action_state, "accepted")
-    self.assertEqual(state.action_message, "Pairing request accepted")
+    self.assertEqual(state.action_message, "Pair request sent")
     self.assertEqual(state.action_error, "")
 
     completed = state.handle_pair_process_completed(state.generation, "dev-1", 0, is_pair=True)
     self.assertTrue(completed)
-    self.assertEqual(state.pending_pairing["dev-1"], "accepted")
+    self.assertEqual(state.pending_pairing["dev-1"], "requesting")
+    self.assertEqual(state.action_message, "Pair request sent")
+
+    state.apply_scan([
+        "DEVICE\tdev-1\tNearby Phone\tphone\ttrue\ttrue\t-1\tfalse\tkdeconnect_battery,kdeconnect_ping"
+    ], state.generation)
+    self.assertNotIn("dev-1", state.pending_pairing)
+    self.assertEqual(state.action_message, "Device paired")
 
   def test_pairing_rejection_and_timeout_error_categorization(self):
     unpaired_dev = parse_device("DEVICE\tdev-1\tNearby Phone\tphone\tfalse\ttrue\t-1\tfalse\tkdeconnect_battery")
@@ -662,16 +713,39 @@ class StateTests(unittest.TestCase):
     # Rejection (exit code 2)
     state.pair_device("dev-1")
     state.handle_pair_process_completed(state.generation, "dev-1", 2, is_pair=True)
-    self.assertEqual(state.pending_pairing["dev-1"], "failed")
+    self.assertNotIn("dev-1", state.pending_pairing)
     self.assertEqual(state.action_state, "failed")
-    self.assertEqual(state.action_error, "pairing rejected")
+    self.assertEqual(state.action_error, "Pairing timed out or rejected")
 
     # Timeout (exit code 3)
     state.pair_device("dev-1")
     state.handle_pair_process_completed(state.generation, "dev-1", 3, is_pair=True)
-    self.assertEqual(state.pending_pairing["dev-1"], "failed")
+    self.assertNotIn("dev-1", state.pending_pairing)
     self.assertEqual(state.action_state, "failed")
-    self.assertEqual(state.action_error, "pairing timed out")
+    self.assertEqual(state.action_error, "Pairing timed out or rejected")
+
+    # Watchdog timeout trigger
+    state.pair_device("dev-1")
+    state.handle_timeout("dev-1")
+    self.assertNotIn("dev-1", state.pending_pairing)
+    self.assertEqual(state.action_state, "failed")
+    self.assertEqual(state.action_error, "Pairing timed out or rejected")
+
+  def test_stale_pairing_cleanup_on_refresh(self):
+    unpaired_dev = parse_device("DEVICE\tdev-1\tNearby Phone\tphone\tfalse\ttrue\t-1\tfalse\tkdeconnect_battery")
+    state = PairingState(devices=[unpaired_dev])
+
+    # Pair requested at timestamp 1000
+    state.pair_device("dev-1", timestamp=1000)
+    self.assertEqual(state.pending_pairing.get("dev-1"), "requesting")
+
+    # Refresh at timestamp 5000 (<10s) -> still requesting
+    state.refresh(force_network=True, current_time=5000)
+    self.assertEqual(state.pending_pairing.get("dev-1"), "requesting")
+
+    # Refresh at timestamp 12000 (>10s) -> stale request cleared
+    state.refresh(force_network=True, current_time=12000)
+    self.assertNotIn("dev-1", state.pending_pairing)
 
   def test_inline_destructive_unpairing_confirmation_and_cancellation(self):
     paired_dev = parse_device("DEVICE\tdev-1\tMy Phone\tphone\ttrue\ttrue\t80\tfalse\tkdeconnect_battery")
@@ -691,6 +765,7 @@ class StateTests(unittest.TestCase):
     state.request_unpair_confirm("dev-1")
     self.assertTrue(state.confirm_unpair("dev-1"))
     self.assertEqual(state.pending_pairing["dev-1"], "removing")
+    self.assertEqual(state.action_message, "Device unpaired")
 
     # Exit code 1 (failure)
     state.handle_pair_process_completed(state.generation, "dev-1", 1, is_pair=False)
@@ -721,7 +796,11 @@ class StateTests(unittest.TestCase):
     self.assertIn("setPendingPairing", source)
     self.assertIn("pairDevice", source)
     self.assertIn("unpairDevice", source)
-    self.assertIn('"Pairing request accepted"', source)
+    self.assertIn('"Pair request sent"', source)
+    self.assertIn('"Device paired"', source)
+    self.assertIn('"Device unpaired"', source)
+    self.assertIn('"Pairing timed out or rejected"', source)
+    self.assertIn("pairingWatchdogTimer", source)
 
     ui_source = (ROOT / "Panel.qml").read_text() + "\n" + "\n".join(p.read_text() for p in (ROOT / "components").glob("*.qml"))
     self.assertIn("unpairConfirmingId", ui_source)
@@ -1109,6 +1188,81 @@ class StateTests(unittest.TestCase):
     device_section = (ROOT / "components" / "DeviceSection.qml").read_text()
     self.assertIn("Install Dependencies", device_section)
     self.assertIn("installDependencies()", device_section)
+
+  def test_action_error_and_status_banner_contracts(self):
+    device_section = (ROOT / "components" / "DeviceSection.qml").read_text()
+    self.assertIn("statusBanner", device_section)
+    self.assertIn("actionError", device_section)
+    self.assertIn("actionMessage", device_section)
+    self.assertIn("composerError", device_section)
+    self.assertIn("dismissButton", device_section)
+    self.assertIn('root.service.actionMessage = ""', device_section)
+    self.assertIn('root.service.actionError = ""', device_section)
+    self.assertIn('root.panel.composerError = ""', device_section)
+
+  def test_action_verbiage_and_auto_dismiss_contracts(self):
+    controller_source = (ROOT / "KdeConnectController.qml").read_text()
+    # Check natural action verbiages
+    self.assertIn('"Ping sent"', controller_source)
+    self.assertIn('"Text sent"', controller_source)
+    self.assertIn('"Ringing device..."', controller_source)
+    self.assertIn('"Clipboard synced"', controller_source)
+    self.assertIn('"File sent"', controller_source)
+    self.assertIn('"Command executed"', controller_source)
+    self.assertIn('"Pair request sent"', controller_source)
+    self.assertIn('"Device unpaired"', controller_source)
+
+    # Ensure no generic "accepted" action messages remain
+    self.assertNotIn('"Ping request accepted"', controller_source)
+    self.assertNotIn('"Text-share request accepted"', controller_source)
+    self.assertNotIn('"Ring request accepted"', controller_source)
+    self.assertNotIn('"Clipboard request accepted"', controller_source)
+    self.assertNotIn('"File-transfer request accepted"', controller_source)
+    self.assertNotIn('"Remote-command request accepted"', controller_source)
+    self.assertNotIn('"Pairing request accepted"', controller_source)
+    self.assertNotIn('"Unpair request accepted"', controller_source)
+
+    # Auto-dismiss timer contract
+    self.assertIn("actionDismissTimer", controller_source)
+    self.assertIn("interval: 4000", controller_source)
+    self.assertIn("onActionMessageChanged:", controller_source)
+    self.assertIn("onActionErrorChanged:", controller_source)
+
+  def test_discovery_script_skips_bad_device_with_continue(self):
+    discovery_source = (ROOT / "scripts" / "discover_devices.sh").read_text()
+    self.assertIn("|| continue", discovery_source)
+
+  def test_device_section_offline_and_empty_states_contracts(self):
+    device_section = (ROOT / "components" / "DeviceSection.qml").read_text()
+    self.assertIn("Required packages missing", device_section)
+    self.assertIn("Install Dependencies", device_section)
+    self.assertIn("KDE Connect daemon stopped", device_section)
+    self.assertIn("Start Service", device_section)
+    self.assertIn("No devices found", device_section)
+    self.assertIn("Allow in Firewall", device_section)
+
+  def test_action_toolbar_header_unknown_type_contract(self):
+    toolbar_source = (ROOT / "components" / "ActionToolbar.qml").read_text()
+    self.assertIn('"unknown"', toolbar_source)
+    self.assertNotIn('"UNKNOWN ACTIONS"', toolbar_source)
+
+  def test_unreachable_device_suppresses_battery_display(self):
+    offline_device = parse_device("DEVICE\tdev-off\tPhone\tphone\ttrue\tfalse\t80\ttrue\tkdeconnect_battery")
+    self.assertEqual(format_battery_status(offline_device), "")
+
+    device_section = (ROOT / "components" / "DeviceSection.qml").read_text()
+    self.assertIn("root.device.reachable", device_section)
+
+  def test_keyboard_navigation_no_double_movement_and_hotkey_safety(self):
+    panel_source = (ROOT / "Panel.qml").read_text()
+    # Double movement fix: onMoveRequested does not call select(dy)
+    self.assertNotIn("onMoveRequested: function(dx, dy) {\n            if (!root.cursorActive) { root.cursorActive = true; return }\n            if (dy) {", panel_source)
+    # Hotkey safety: onTextKey returns early during composition
+    self.assertIn('if (root.activeComposer !== "none") return', panel_source)
+    # Clamping actionSelectedIndex on availableActions changes
+    self.assertIn("onAvailableActionsChanged:", panel_source)
+    # Escape/c unpair confirmation cancellation
+    self.assertIn("root.cancelUnpairConfirm", panel_source)
 
 
 if __name__ == "__main__":

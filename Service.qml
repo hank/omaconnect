@@ -29,6 +29,7 @@ Item {
 
     function refresh(forceNetwork) { controller.refresh(forceNetwork) }
     function selectDevice(id) { controller.selectDevice(id) }
+    function clearActionState() { controller.clearActionState() }
     function setPendingPairing(id, state) { controller.setPendingPairing(id, state) }
     function pingDevice(id, text) { return controller.pingDevice(id, text) }
     function shareText(id, text) { return controller.shareText(id, text) }

@@ -20,7 +20,7 @@ Column {
     readonly property string fontFamily: bar ? bar.fontFamily : "sans-serif"
 
     PanelSectionHeader {
-        text: root.device ? (root.device.type.toUpperCase() + " ACTIONS") : "ACTIONS"
+        text: (root.device && root.device.type && root.device.type !== "unknown") ? (root.device.type.toUpperCase() + " ACTIONS") : "ACTIONS"
         foreground: root.foreground
         fontFamily: root.fontFamily
     }

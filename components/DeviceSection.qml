@@ -75,7 +75,7 @@ Column {
                 }
 
                 Row {
-                    visible: !!(root.device && root.service && root.service.deviceBatteryText(root.device) !== "")
+                    visible: !!(root.device && root.device.reachable && root.service && root.service.deviceBatteryText(root.device) !== "")
                     spacing: Style.space(6)
 
                     Text {
@@ -99,8 +99,65 @@ Column {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
+            }
+        }
+    }
 
+    Rectangle {
+        id: statusBanner
+        visible: !!((root.service && (root.service.actionError || root.service.actionMessage)) || (root.panel && root.panel.composerError))
+        width: parent.width
+        implicitHeight: Math.max(bannerText.implicitHeight, Style.space(18)) + Style.space(8)
+        radius: Style.cornerRadius
+        color: ((root.service && root.service.actionError) || (root.panel && root.panel.composerError))
+            ? Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.15)
+            : Style.hoverFillFor(root.foreground, Color.accent)
 
+        Text {
+            id: bannerText
+            anchors.left: parent.left
+            anchors.right: dismissButton.left
+            anchors.leftMargin: Style.space(24)
+            anchors.rightMargin: Style.space(4)
+            anchors.verticalCenter: parent.verticalCenter
+            text: {
+                if (root.service && root.service.actionError) return root.service.actionError
+                if (root.panel && root.panel.composerError) return root.panel.composerError
+                if (root.service && root.service.actionMessage) return root.service.actionMessage
+                return ""
+            }
+            color: ((root.service && root.service.actionError) || (root.panel && root.panel.composerError)) ? Color.urgent : root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+        }
+
+        MouseArea {
+            id: dismissButton
+            anchors.right: parent.right
+            anchors.rightMargin: Style.space(6)
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(18)
+            height: Style.space(18)
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                if (root.service) {
+                    root.service.actionMessage = ""
+                    root.service.actionError = ""
+                }
+                if (root.panel) {
+                    root.panel.composerError = ""
+                }
+            }
+
+            Text {
+                anchors.centerIn: parent
+                text: "✕"
+                color: ((root.service && root.service.actionError) || (root.panel && root.panel.composerError)) ? Color.urgent : root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                opacity: parent.pressed ? 0.6 : 0.85
             }
         }
     }
@@ -193,10 +250,16 @@ Column {
 
                         Button {
                             visible: !isUnpairConfirming && devicePendingState === "requesting"
-                            enabled: false
                             text: "Pairing..."
+                            tooltipText: "Click to cancel request"
                             foreground: root.foreground
                             fontFamily: root.fontFamily
+                            onClicked: {
+                                if (root.service) {
+                                    root.service.setPendingPairing(modelData.id, "")
+                                    if (typeof root.service.clearActionState === "function") root.service.clearActionState()
+                                }
+                            }
                         }
                         Button {
                             visible: !isUnpairConfirming && devicePendingState === "removing"
@@ -255,6 +318,7 @@ Column {
             text: {
                 if (root.service && root.service.scanning) return "Scanning..."
                 if (root.service && root.service.discoveryState === "not_installed") return "Required packages missing"
+                if (root.service && root.service.discoveryState === "unavailable") return "KDE Connect daemon stopped"
                 return "No devices found"
             }
             color: Qt.darker(root.foreground, 1.4)
@@ -283,7 +347,27 @@ Column {
         }
 
         Row {
-            visible: !(root.service && root.service.scanning) && (!root.service || root.service.discoveryState !== "not_installed")
+            visible: !(root.service && root.service.scanning) && (root.service && root.service.discoveryState === "unavailable")
+            spacing: Style.space(6)
+
+            Text {
+                text: "daemon not running"
+                color: Qt.darker(root.foreground, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Button {
+                text: "Start Service"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: if (root.service) root.service.refresh(true)
+            }
+        }
+
+        Row {
+            visible: !(root.service && root.service.scanning) && (!root.service || (root.service.discoveryState !== "not_installed" && root.service.discoveryState !== "unavailable"))
             spacing: Style.space(6)
 
             Text {

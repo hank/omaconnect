@@ -15,6 +15,26 @@ Item {
     property string actionState: "idle"
     property string actionMessage: ""
     property string actionError: ""
+
+    Timer {
+        id: actionDismissTimer
+        interval: 4000
+        repeat: false
+        onTriggered: {
+            root.actionMessage = ""
+            root.actionError = ""
+        }
+    }
+
+    onActionMessageChanged: {
+        if (actionMessage !== "" || actionError !== "") actionDismissTimer.restart()
+        else actionDismissTimer.stop()
+    }
+
+    onActionErrorChanged: {
+        if (actionMessage !== "" || actionError !== "") actionDismissTimer.restart()
+        else actionDismissTimer.stop()
+    }
     property string selectedDeviceId: ""
     property var devices: []
     property var remoteCommands: []
@@ -23,6 +43,7 @@ Item {
     property int generation: 0
     property int actionGeneration: 0
     property var pendingPairing: ({})
+    property var pairingRequestTimes: ({})
     property bool fileBusy: false
     property var capabilities: ({})
     property int monitorRestartCount: 0
@@ -130,6 +151,21 @@ Item {
             if (!forceNetwork) return
             scanProcess.running = false
         }
+        if (forceNetwork) {
+            var now = Date.now()
+            var copy = Object.assign({}, pendingPairing)
+            var changed = false
+            for (var devId in copy) {
+                if (copy[devId] === "requesting") {
+                    var reqTime = pairingRequestTimes[devId] || 0
+                    if (!reqTime || (now - reqTime >= 10000)) {
+                        delete copy[devId]
+                        changed = true
+                    }
+                }
+            }
+            if (changed) pendingPairing = copy
+        }
         var nextGeneration = generation + 1
         generation = nextGeneration
         scanning = true
@@ -152,7 +188,7 @@ Item {
     }
 
     function deviceBatteryText(device) {
-        if (!device) return ""
+        if (!device || !device.reachable) return ""
         var batteryText = ""
         if (device.capabilities && device.capabilities.battery) {
             if (device.battery < 0) {
@@ -258,6 +294,25 @@ Item {
             if (device) next.push(device)
         })
         devices = next
+        next.forEach(function(dev) {
+            if (dev.paired) {
+                if (root.pendingPairing[dev.id] === "requesting") {
+                    root.setPendingPairing(dev.id, "")
+                    pairingWatchdogTimer.stop()
+                    if (root.selectedDeviceId === dev.id || !root.selectedDeviceId) {
+                        root.actionState = "accepted"
+                        root.actionMessage = "Device paired"
+                        root.actionError = ""
+                    }
+                } else if (root.pendingPairing[dev.id]) {
+                    root.setPendingPairing(dev.id, "")
+                }
+            } else {
+                if (root.pendingPairing[dev.id] === "removing" || root.pendingPairing[dev.id] === "unpair_confirm") {
+                    root.setPendingPairing(dev.id, "")
+                }
+            }
+        })
         if (!deviceById(selectedDeviceId)) {
             if (next.length) selectDevice(next[0].id)
             else clearActionState()
@@ -308,7 +363,7 @@ Item {
         }
         var device = deviceById(id)
         if (!device || !device.capabilities.ping || !canAct(id)) return false
-        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--ping-msg", text], "Ping request accepted", "ping")
+        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--ping-msg", text], "Ping sent", "ping")
     }
 
     function shareText(id, text) {
@@ -321,19 +376,19 @@ Item {
         }
         var device = deviceById(id)
         if (!device || !device.capabilities.text || !canAct(id)) return false
-        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--share-text", value], "Text-share request accepted", "text share")
+        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--share-text", value], "Text sent", "text share")
     }
 
     function ringDevice(id) {
         var device = deviceById(id)
         if (!device || !device.capabilities.ring) return false
-        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--ring"], "Ring request accepted", "ring")
+        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--ring"], "Ringing device...", "ring")
     }
 
     function sendClipboard(id) {
         var device = deviceById(id)
         if (!device || !device.capabilities.clipboard) return false
-        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--send-clipboard"], "Clipboard request accepted", "clipboard")
+        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--send-clipboard"], "Clipboard synced", "clipboard")
     }
 
     function startFileSelection(id) {
@@ -370,7 +425,7 @@ Item {
             fileBusy = false
             return false
         }
-        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--share", value], "File-transfer request accepted", "file transfer")
+        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--share", value], "File sent", "file transfer")
     }
 
     function fetchRemoteCommands(id) {
@@ -432,16 +487,20 @@ Item {
         var value = String(key || "").trim()
         var device = deviceById(id)
         if (!value || !device || !device.capabilities.commands) return false
-        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--execute-command", value], "Remote-command request accepted", "remote command")
+        return startAction(id, ["kdeconnect-cli", "-d", String(id), "--execute-command", value], "Command executed", "remote command")
     }
 
     function pairDevice(id) {
         var device = deviceById(id)
         if (!device || pairProcess.running || actionProcess.running || !device.capabilities.pair) return false
         setPendingPairing(id, "requesting")
+        var times = Object.assign({}, pairingRequestTimes)
+        times[String(id)] = Date.now()
+        pairingRequestTimes = times
         actionState = "accepted"
-        actionMessage = "Pairing request accepted"
+        actionMessage = "Pair request sent"
         actionError = ""
+        pairingWatchdogTimer.restart()
         pairProcess.targetDeviceId = String(id)
         pairProcess.targetGeneration = generation
         pairProcess.command = ["kdeconnect-cli", "-d", String(id), "--pair"]
@@ -453,6 +512,9 @@ Item {
         var device = deviceById(id)
         if (!device || pairProcess.running || actionProcess.running || !device.capabilities.pair) return false
         setPendingPairing(id, "removing")
+        actionState = "accepted"
+        actionMessage = "Device unpaired"
+        actionError = ""
         pairProcess.targetDeviceId = String(id)
         pairProcess.targetGeneration = generation
         pairProcess.command = ["kdeconnect-cli", "-d", String(id), "--unpair"]
@@ -490,7 +552,7 @@ Item {
         id: actionProcess
         property string targetDeviceId: ""
         property int targetGeneration: 0
-        property string acceptedMessage: "Request accepted"
+        property string acceptedMessage: "Action completed"
         property string operation: "action"
         stderr: StdioCollector { waitForEnd: true }
         onExited: function(code) {
@@ -510,14 +572,19 @@ Item {
         onExited: function(code) {
             var isPair = pairProcess.command && pairProcess.command.indexOf("--pair") !== -1
             var op = isPair ? "pairing" : "unpairing"
-            root.setPendingPairing(targetDeviceId, code === 0 ? "accepted" : "failed")
+            if (code === 0) {
+                root.setPendingPairing(targetDeviceId, isPair ? "requesting" : "accepted")
+            } else {
+                if (isPair) pairingWatchdogTimer.stop()
+                root.setPendingPairing(targetDeviceId, isPair ? "" : "failed")
+            }
             if (targetGeneration !== root.generation || targetDeviceId !== root.selectedDeviceId) {
                 root.refresh()
                 return
             }
             if (code === 0) {
                 root.actionState = "accepted"
-                root.actionMessage = isPair ? "Pairing request accepted" : "Unpair request accepted"
+                root.actionMessage = isPair ? "Pair request sent" : "Device unpaired"
                 root.actionError = ""
             } else {
                 root.actionState = "failed"
@@ -529,6 +596,26 @@ Item {
     }
 
     Timer { id: dbusDebounceTimer; interval: 300; repeat: false; onTriggered: root.refresh() }
+
+    Timer {
+        id: pairingWatchdogTimer
+        interval: 30000
+        repeat: false
+        onTriggered: {
+            var hadPending = false
+            for (var devId in root.pendingPairing) {
+                if (root.pendingPairing[devId] === "requesting") {
+                    root.setPendingPairing(devId, "")
+                    hadPending = true
+                }
+            }
+            if (hadPending || root.actionMessage === "Pair request sent") {
+                root.actionState = "failed"
+                root.actionMessage = ""
+                root.actionError = "Pairing timed out or rejected"
+            }
+        }
+    }
 
     Process {
         id: signalProcess
@@ -577,5 +664,5 @@ Item {
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
     Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
-    Component.onDestruction: { dbusDebounceTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false; installProcess.running = false }
+    Component.onDestruction: { actionDismissTimer.stop(); dbusDebounceTimer.stop(); pairingWatchdogTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false; installProcess.running = false }
 }

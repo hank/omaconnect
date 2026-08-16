@@ -36,8 +36,16 @@ KeyboardPanel {
     property int commandSelectedIndex: 0
     property string unpairConfirmingId: ""
 
-    function open() { opened = true }
-    function close() { opened = false }
+    function open() {
+        if (unpairConfirmingId) cancelUnpairConfirm(unpairConfirmingId)
+        unpairConfirmingId = ""
+        opened = true
+    }
+    function close() {
+        if (unpairConfirmingId) cancelUnpairConfirm(unpairConfirmingId)
+        unpairConfirmingId = ""
+        opened = false
+    }
     function toggle() { opened = !opened }
     function closeForPopoutSwitch() { opened = false }
 
@@ -52,6 +60,16 @@ KeyboardPanel {
         if (caps.ping) res.push("ping")
         if (caps.text) res.push("text")
         return res
+    }
+
+    onAvailableActionsChanged: {
+        var acts = availableActions
+        if (acts.length > 0) {
+            actionSelectedIndex = Math.max(0, Math.min(acts.length - 1, actionSelectedIndex))
+        } else {
+            actionSelectedIndex = 0
+            if (focusSection === "actions") focusSection = "devices"
+        }
     }
 
     function triggerAction(actionId) {
@@ -85,6 +103,7 @@ KeyboardPanel {
     function selectDevice(id) {
         if (!service) return
         if (unpairConfirmingId && unpairConfirmingId !== id) cancelUnpairConfirm(unpairConfirmingId)
+        unpairConfirmingId = ""
         service.selectDevice(id)
         var list = service.devices || []
         for (var i = 0; i < list.length; i++) {
@@ -92,6 +111,13 @@ KeyboardPanel {
                 selectedIndex = i
                 break
             }
+        }
+        var acts = availableActions
+        if (acts.length > 0) {
+            actionSelectedIndex = Math.max(0, Math.min(acts.length - 1, actionSelectedIndex))
+        } else {
+            actionSelectedIndex = 0
+            if (focusSection === "actions") focusSection = "devices"
         }
     }
 
@@ -142,9 +168,12 @@ KeyboardPanel {
             if (success) {
                 draftPing = ""
                 closeComposer()
+            } else {
+                composerError = (service && service.actionError) ? service.actionError : "Failed to send ping"
             }
             return success
         }
+        composerError = "Service unavailable"
         return false
     }
 
@@ -164,9 +193,12 @@ KeyboardPanel {
             if (success) {
                 draftText = ""
                 closeComposer()
+            } else {
+                composerError = (service && service.actionError) ? service.actionError : "Failed to share text"
             }
             return success
         }
+        composerError = "Service unavailable"
         return false
     }
 
@@ -200,7 +232,12 @@ KeyboardPanel {
                 if (root.unpairConfirmingId === dev.id || pending === "unpair_confirm") {
                     root.confirmUnpair(dev.id)
                 } else if (!dev.paired) {
-                    if (pending !== "requesting") service.pairDevice(dev.id)
+                    if (pending === "requesting") {
+                        service.setPendingPairing(dev.id, "")
+                        if (typeof service.clearActionState === "function") service.clearActionState()
+                    } else {
+                        service.pairDevice(dev.id)
+                    }
                 } else {
                     if (pending !== "removing") root.requestUnpairConfirm(dev.id)
                 }
@@ -241,29 +278,28 @@ KeyboardPanel {
         id: keyCatcher
         anchors.fill: parent
 
-        blocked: !!(composerSection && ((composerSection.pingInput && composerSection.pingInput.activeFocus) || (composerSection.textInput && composerSection.textInput.activeFocus)))
+        blocked: root.activeComposer !== "none" || !!(composerSection && ((composerSection.pingInput && composerSection.pingInput.activeFocus) || (composerSection.textInput && composerSection.textInput.activeFocus)))
         onMoveRequested: function(dx, dy) {
-            if (!root.cursorActive) { root.cursorActive = true; return }
-            if (dy) {
-                if (root.focusSection === "commands" && root.commandsExpanded) root.selectCommand(dy)
-                else if (root.focusSection === "actions") {
-                    var acts = root.availableActions
-                    if (acts.length > 0) {
-                        if (dy > 0 && root.actionSelectedIndex < acts.length - 1) root.actionSelectedIndex++
-                        else if (dy < 0 && root.actionSelectedIndex > 0) root.actionSelectedIndex--
-                    }
-                }
-                else root.select(dy)
-            }
+            if (!root.cursorActive) root.cursorActive = true
         }
         onActivateRequested: root.activate()
-        onCloseRequested: root.close()
+        onCloseRequested: {
+            if (root.unpairConfirmingId) root.cancelUnpairConfirm(root.unpairConfirmingId)
+            else if (root.activeComposer !== "none") root.closeComposer()
+            else root.close()
+        }
         onTabRequested: function(direction) { if (root.bar && typeof root.bar.switchPanelFrom === "function") root.bar.switchPanelFrom(root.barIdentity, direction) }
         onTextKey: function(value) {
+            if (root.activeComposer !== "none") return
             var key = String(value).toLowerCase()
             if (key === "r" && root.service) root.service.refresh(true)
             else if (key === "j" || key === "down") {
-                if (root.focusSection === "commands" && root.commandsExpanded) root.selectCommand(1)
+                if (root.focusSection === "commands" && root.commandsExpanded) {
+                    var cmdsD = (root.service && root.service.remoteCommands) ? root.service.remoteCommands : []
+                    if (cmdsD.length > 0 && root.commandSelectedIndex < cmdsD.length - 1) root.selectCommand(1)
+                    else root.focusSection = "devices"
+                }
+                else if (root.focusSection === "commands") root.focusSection = "devices"
                 else if (root.focusSection === "actions") {
                     var actsD = root.availableActions
                     if (actsD.length > 0 && root.actionSelectedIndex < actsD.length - 1) root.actionSelectedIndex++
@@ -273,7 +309,23 @@ KeyboardPanel {
                 else root.select(1)
             }
             else if (key === "k" || key === "up") {
-                if (root.focusSection === "commands" && root.commandsExpanded) root.selectCommand(-1)
+                if (root.focusSection === "commands" && root.commandsExpanded) {
+                    if (root.commandSelectedIndex > 0) root.selectCommand(-1)
+                    else {
+                        var actsU = root.availableActions
+                        if (actsU.length > 0) {
+                            root.focusSection = "actions"
+                            root.actionSelectedIndex = actsU.length - 1
+                        } else root.focusSection = "devices"
+                    }
+                }
+                else if (root.focusSection === "commands") {
+                    var actsUC = root.availableActions
+                    if (actsUC.length > 0) {
+                        root.focusSection = "actions"
+                        root.actionSelectedIndex = actsUC.length - 1
+                    } else root.focusSection = "devices"
+                }
                 else if (root.focusSection === "actions") {
                     if (root.actionSelectedIndex > 0) root.actionSelectedIndex--
                     else root.focusSection = "devices"
@@ -350,9 +402,14 @@ KeyboardPanel {
                 var targetIdY = root.service.selectedDeviceId
                 if (targetIdY) root.confirmUnpair(targetIdY)
             }
-            else if ((key === "c" || key === "escape") && root.service && root.service.selectedDeviceId && (root.unpairConfirmingId === root.service.selectedDeviceId || (root.service.pendingPairing && root.service.pendingPairing[root.service.selectedDeviceId] === "unpair_confirm"))) {
-                var targetIdC = root.service.selectedDeviceId
-                if (targetIdC) root.cancelUnpairConfirm(targetIdC)
+            else if ((key === "c" || key === "escape")) {
+                var targetIdC = root.unpairConfirmingId || (root.service ? root.service.selectedDeviceId : "")
+                if (root.unpairConfirmingId || (root.service && targetIdC && root.service.pendingPairing && root.service.pendingPairing[targetIdC] === "unpair_confirm")) {
+                    root.cancelUnpairConfirm(targetIdC)
+                } else if (root.service && targetIdC && root.service.pendingPairing && root.service.pendingPairing[targetIdC] === "requesting") {
+                    root.service.setPendingPairing(targetIdC, "")
+                    if (typeof root.service.clearActionState === "function") root.service.clearActionState()
+                }
             }
         }
 
