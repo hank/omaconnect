@@ -63,6 +63,18 @@ entries=$(printf '%s' "$ids" | sed -E 's/.*\[//; s/\].*//' | tr ',' '\n' \
     | sed -nE "s/^[[:space:]]*['\"]?([^'\"]+)['\"]?[[:space:]]*$/\1/p")
 [[ -n "$entries" || "$ids" =~ \(\[[[:space:]]*\],[[:space:]]*\) ]] || exit 70
 
+is_address_reachable() {
+    local addr=$1
+    [[ -n "$addr" ]] || return 1
+    if timeout 0.4 bash -c ">/dev/tcp/$addr/1716" 2>/dev/null; then
+        return 0
+    fi
+    if ping -c 1 -W 1 "$addr" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
 while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
     path="$entry"
@@ -72,6 +84,26 @@ while IFS= read -r entry; do
     type=$(value "$(property "$path" org.kde.kdeconnect.device type)") || continue
     paired=$(value "$(property "$path" org.kde.kdeconnect.device isPaired)") || continue
     reachable=$(value "$(property "$path" org.kde.kdeconnect.device isReachable)") || continue
+    if [[ "$reachable" == "true" ]]; then
+        providers_raw=$(property "$path" org.kde.kdeconnect.device activeProviderNames 2>/dev/null) || providers_raw=""
+        addrs_raw=$(property "$path" org.kde.kdeconnect.device reachableAddresses 2>/dev/null) || addrs_raw=""
+        addrs=$(printf '%s' "$addrs_raw" | sed -E 's/.*\[//; s/\].*//' | tr ',' '\n' | sed -nE "s/^[[:space:]]*['\"]?([^'\"]+)['\"]?[[:space:]]*$/\1/p")
+        if [[ -n "$addrs" || "$providers_raw" == *"LAN"* ]]; then
+            has_alive_addr=false
+            if [[ -n "$addrs" ]]; then
+                while IFS= read -r addr; do
+                    [[ -n "$addr" ]] || continue
+                    if is_address_reachable "$addr"; then
+                        has_alive_addr=true
+                        break
+                    fi
+                done <<< "$addrs"
+            fi
+            if [[ "$has_alive_addr" != true ]]; then
+                reachable=false
+            fi
+        fi
+    fi
     supported=$(property "$path" org.kde.kdeconnect.device supportedPlugins) || continue
     plugins=
     for plugin in kdeconnect_battery kdeconnect_ping kdeconnect_share kdeconnect_runcommand kdeconnect_findmyphone kdeconnect_clipboard kdeconnect_connectivity_report kdeconnect_sms; do

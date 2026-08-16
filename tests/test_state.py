@@ -1232,6 +1232,12 @@ class StateTests(unittest.TestCase):
     discovery_source = (ROOT / "scripts" / "discover_devices.sh").read_text()
     self.assertIn("|| continue", discovery_source)
 
+  def test_discovery_script_reachability_verification(self):
+    discovery_source = (ROOT / "scripts" / "discover_devices.sh").read_text()
+    self.assertIn("is_address_reachable()", discovery_source)
+    self.assertIn("reachableAddresses", discovery_source)
+    self.assertIn("has_alive_addr", discovery_source)
+
   def test_device_section_offline_and_empty_states_contracts(self):
     device_section = (ROOT / "components" / "DeviceSection.qml").read_text()
     self.assertIn("Required packages missing", device_section)
