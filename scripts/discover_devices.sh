@@ -5,7 +5,7 @@ set -Eeuo pipefail
 # and a non-zero exit for missing dependencies, D-Bus errors, or bad replies.
 base=/modules/kdeconnect
 
-for command in gdbus sed grep tr; do
+for command in gdbus sed grep tr kdeconnect-cli; do
     command -v "$command" >/dev/null 2>&1 || exit 127
 done
 

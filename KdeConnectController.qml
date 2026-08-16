@@ -114,6 +114,17 @@ Item {
         firewallProcess.running = true
     }
 
+    function getInstallScriptPath() {
+        return scriptPath("scripts/install_dependencies.sh")
+    }
+
+    function installDependencies() {
+        if (installProcess.running) return
+        var script = getInstallScriptPath()
+        installProcess.command = ["bash", "-c", "if command -v omarchy-launch-floating-terminal-with-presentation >/dev/null 2>&1; then omarchy-launch-floating-terminal-with-presentation \"bash '" + script + "'\"; else xdg-terminal-exec bash '" + script + "'; fi"]
+        installProcess.running = true
+    }
+
     function refresh(forceNetwork) {
         if (scanProcess.running) {
             if (!forceNetwork) return
@@ -252,11 +263,17 @@ Item {
             else clearActionState()
         }
         daemonAvailable = scanProcess.exitCode === 0
-        sessionBusAvailable = daemonAvailable
-        discoveryState = daemonAvailable ? "ready" : "unavailable"
-        discoveryMessage = daemonAvailable
-            ? (next.length ? "Device state is current" : "No KDE Connect devices")
-            : "KDE Connect unavailable"
+        sessionBusAvailable = scanProcess.exitCode !== 127
+        if (scanProcess.exitCode === 127) {
+            discoveryState = "not_installed"
+            discoveryMessage = "KDE Connect not installed"
+        } else if (scanProcess.exitCode === 0) {
+            discoveryState = "ready"
+            discoveryMessage = next.length ? "Device state is current" : "No KDE Connect devices"
+        } else {
+            discoveryState = "unavailable"
+            discoveryMessage = "KDE Connect unavailable"
+        }
     }
 
     function startAction(id, command, acceptedMessage, operation) {
@@ -550,8 +567,15 @@ Item {
         }
     }
 
+    Process {
+        id: installProcess
+        onExited: function(code) {
+            root.refresh(true)
+        }
+    }
+
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
     Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
-    Component.onDestruction: { dbusDebounceTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false }
+    Component.onDestruction: { dbusDebounceTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false; installProcess.running = false }
 }

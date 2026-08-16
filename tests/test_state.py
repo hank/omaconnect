@@ -1089,6 +1089,27 @@ class StateTests(unittest.TestCase):
     self.assertIn("function selectDevice(id)", panel_source)
     self.assertIn("selectedIndex = i", panel_source)
 
+  def test_dependency_installer_script_and_states(self):
+    installer_path = ROOT / "scripts" / "install_dependencies.sh"
+    self.assertTrue(installer_path.exists())
+    content = installer_path.read_text()
+    self.assertIn("pacman", content)
+    self.assertIn("kdeconnect", content)
+    self.assertIn("glib2", content)
+    self.assertIn("dbus", content)
+
+    discovery_source = (ROOT / "scripts" / "discover_devices.sh").read_text()
+    self.assertIn("kdeconnect-cli", discovery_source)
+    self.assertIn("exit 127", discovery_source)
+
+    controller_source = (ROOT / "KdeConnectController.qml").read_text()
+    self.assertIn('discoveryState = "not_installed"', controller_source)
+    self.assertIn("installDependencies", controller_source)
+
+    device_section = (ROOT / "components" / "DeviceSection.qml").read_text()
+    self.assertIn("Install Dependencies", device_section)
+    self.assertIn("installDependencies()", device_section)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

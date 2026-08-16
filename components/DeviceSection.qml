@@ -252,14 +252,38 @@ Column {
         width: parent.width
 
         Text {
-            text: root.service && root.service.scanning ? "Scanning..." : "No devices found"
+            text: {
+                if (root.service && root.service.scanning) return "Scanning..."
+                if (root.service && root.service.discoveryState === "not_installed") return "Required packages missing"
+                return "No devices found"
+            }
             color: Qt.darker(root.foreground, 1.4)
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
         }
 
         Row {
-            visible: !(root.service && root.service.scanning)
+            visible: !(root.service && root.service.scanning) && (root.service && root.service.discoveryState === "not_installed")
+            spacing: Style.space(6)
+
+            Text {
+                text: "kdeconnect needed"
+                color: Qt.darker(root.foreground, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Button {
+                text: "Install Dependencies"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: if (root.service) root.service.installDependencies()
+            }
+        }
+
+        Row {
+            visible: !(root.service && root.service.scanning) && (!root.service || root.service.discoveryState !== "not_installed")
             spacing: Style.space(6)
 
             Text {
