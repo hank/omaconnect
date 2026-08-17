@@ -66,7 +66,9 @@ entries=$(printf '%s' "$ids" | sed -E 's/.*\[//; s/\].*//' | tr ',' '\n' \
 is_address_reachable() {
     local addr=$1
     [[ -n "$addr" ]] || return 1
-    if timeout 0.4 bash -c ">/dev/tcp/$addr/1716" 2>/dev/null; then
+    # Pass the address as data; interpolating it into the shell program allows
+    # a malformed or compromised D-Bus response to inject shell syntax.
+    if timeout 0.4 bash -c '>/dev/tcp/$1/1716' -- "$addr" 2>/dev/null; then
         return 0
     fi
     if ping -c 1 -W 1 "$addr" >/dev/null 2>&1; then
