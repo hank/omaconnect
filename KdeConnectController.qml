@@ -135,6 +135,16 @@ Item {
         firewallProcess.running = true
     }
 
+    function getRestartScriptPath() {
+        return scriptPath("scripts/restart_daemon.sh")
+    }
+
+    function restartDaemon() {
+        if (restartProcess.running) return
+        restartProcess.command = ["bash", getRestartScriptPath()]
+        restartProcess.running = true
+    }
+
     function getInstallScriptPath() {
         return scriptPath("scripts/install_dependencies.sh")
     }
@@ -673,8 +683,15 @@ Item {
         }
     }
 
+    Process {
+        id: restartProcess
+        onExited: function(code) {
+            root.refresh(true)
+        }
+    }
+
     Timer { id: signalRestart; repeat: false; onTriggered: if (!signalProcess.running) signalProcess.running = true }
     Timer { interval: 15000; running: !signalProcess.running; repeat: true; onTriggered: root.refresh() }
     Component.onCompleted: { root.refresh(); signalProcess.running = true }
-    Component.onDestruction: { actionDismissTimer.stop(); dbusDebounceTimer.stop(); pairingWatchdogTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false; installProcess.running = false }
+    Component.onDestruction: { actionDismissTimer.stop(); dbusDebounceTimer.stop(); pairingWatchdogTimer.stop(); signalRestart.stop(); signalProcess.running = false; scanProcess.running = false; commandsProcess.running = false; actionProcess.running = false; pairProcess.running = false; filePickerProcess.running = false; firewallProcess.running = false; installProcess.running = false; restartProcess.running = false }
 }

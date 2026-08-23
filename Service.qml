@@ -45,6 +45,7 @@ Item {
     function openSmsApp(id) { return controller.openSmsApp(id) }
     function configureFirewall() { controller.configureFirewall() }
     function installDependencies() { controller.installDependencies() }
+    function restartDaemon() { controller.restartDaemon() }
     function deviceOverviewStatus(device) { return controller.deviceOverviewStatus(device) }
     function deviceTypeIcon(type) { return controller.deviceTypeIcon(type) }
     function deviceBatteryText(device, showBattery, showNetwork) { return controller.deviceBatteryText(device, showBattery, showNetwork) }

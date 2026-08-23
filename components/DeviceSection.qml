@@ -423,6 +423,14 @@ Column {
                 fontFamily: root.fontFamily
                 onClicked: if (root.service) root.service.configureFirewall()
             }
+
+            Button {
+                text: "Restart KDE Connect"
+                tooltipText: "Restarts the kdeconnectd background service (fixes a wedged daemon)"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: if (root.service) root.service.restartDaemon()
+            }
         }
     }
 }
