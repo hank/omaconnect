@@ -46,10 +46,22 @@ Column {
                 onClicked: if (root.service) root.service.refresh(true)
             }
 
+            Button {
+                id: restartButton
+                anchors.right: refreshButton.left
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: "󰜉"
+                tooltipText: "Restart KDE Connect service"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: if (root.service) root.service.restartDaemon()
+            }
+
             Column {
                 id: hero
                 anchors.left: parent.left
-                anchors.right: refreshButton.left
+                anchors.right: restartButton.left
                 anchors.rightMargin: Style.space(8)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Style.space(2)
@@ -422,14 +434,6 @@ Column {
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 onClicked: if (root.service) root.service.configureFirewall()
-            }
-
-            Button {
-                text: "Restart KDE Connect"
-                tooltipText: "Restarts the kdeconnectd background service (fixes a wedged daemon)"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: if (root.service) root.service.restartDaemon()
             }
         }
     }
